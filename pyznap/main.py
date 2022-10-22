@@ -120,8 +120,8 @@ def _main():
                              dest='raw', help='raw zfs send. default is false')
     parser_send.add_argument('-r', '--resume', action="store_true",
                              dest='resume', help='resumable send. default is false')
-    parser_send.add_argument('-l', '--last', action="store_true",
-                             dest='send_last_snapshot', help='stat sending from last snapshot')
+    parser_send.add_argument('-l', '--last', action="store",
+                             dest='send_last_snapshot', help='stat sending from last snapshot containing string')
     parser_send.add_argument('--dest-auto-create', action="store_true",
                              dest='dest_auto_create',
                              help='create destination if it does not exist. default is false')
