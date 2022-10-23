@@ -296,7 +296,7 @@ def _main():
                               'dest_keys': dest_key, 'compress': compress, 'exclude': exclude,
                               'raw_send': raw, 'resume': resume, 'dest_auto_create': dest_auto_create,
                               'retries': retries, 'retry_interval': retry_interval, 'max_depth': args.max_depth,
-                              'send_last_snapshot': send_last_snapshot}])
+                              'send_last_snapshot': send_last_snapshot}], settings=settings)
 
             elif args.source and not args.dest:
                 logger.error('Missing dest...')
