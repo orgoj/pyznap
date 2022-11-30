@@ -65,8 +65,8 @@ class SSH:
             General exception raised if anything goes wrong during ssh connection
         """
 
+        self._closed = False
         self.logger = logging.getLogger(__name__)
-
         self.user = user
         self.host = host
         self.port = port
@@ -90,8 +90,6 @@ class SSH:
             run(['exit'], timeout=10, ssh=self, stderr=sp.DEVNULL)
         except (sp.CalledProcessError, sp.TimeoutExpired):
             pass
-
-        self._closed = False
 
         # check if ssh connection is up
         try:
