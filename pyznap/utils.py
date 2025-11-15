@@ -25,6 +25,141 @@ from pkg_resources import resource_string
 SNAPSHOT_TYPES = ('frequent', 'hourly', 'daily', 'weekly', 'monthly', 'yearly')
 
 
+def validate_config(config):
+    """
+    Validate configuration after parsing.
+
+    Checks for common configuration errors and logs them.
+
+    Parameters:
+    ----------
+    config : list
+        Parsed configuration list
+
+    Returns:
+    -------
+    list
+        List of validation error messages (empty if no errors)
+    """
+    logger = logging.getLogger(__name__)
+    errors = []
+    warnings = []
+
+    for entry in config:
+        name = entry.get('name', '?')
+        if not name:
+            name = '//'  # Root filesystem
+
+        # 1. Check snapshot type values are valid integers >= 0
+        for snap_type in SNAPSHOT_TYPES:
+            val = entry.get(snap_type)
+            if val is not None:
+                if not isinstance(val, int):
+                    errors.append(f"{name}: {snap_type} must be an integer, got '{val}'")
+                elif val < 0:
+                    errors.append(f"{name}: {snap_type} must be >= 0, got {val}")
+
+        # 2. Check boolean options have valid values
+        for bool_opt in ['snap', 'clean', 'ignore_not_existing']:
+            val = entry.get(bool_opt)
+            if val is not None and not isinstance(val, bool):
+                errors.append(f"{name}: {bool_opt} must be yes/no, got '{val}'")
+
+        # 3. Check dest/dest_keys/compress/exclude array alignment
+        dest = entry.get('dest')
+        if dest and isinstance(dest, list):
+            dest_count = len(dest)
+
+            # Check dest_keys
+            dest_keys = entry.get('dest_keys')
+            if dest_keys and isinstance(dest_keys, list):
+                if len(dest_keys) != dest_count:
+                    errors.append(f"{name}: dest has {dest_count} entries but dest_keys has {len(dest_keys)} "
+                                f"(must be equal or omit dest_keys)")
+
+            # Check compress
+            compress = entry.get('compress')
+            if compress and isinstance(compress, list):
+                if len(compress) != dest_count:
+                    errors.append(f"{name}: dest has {dest_count} entries but compress has {len(compress)} "
+                                f"(must be equal or omit compress)")
+
+            # Check exclude
+            exclude = entry.get('exclude')
+            if exclude and isinstance(exclude, list):
+                if len(exclude) != dest_count:
+                    errors.append(f"{name}: dest has {dest_count} entries but exclude has {len(exclude)} "
+                                f"(must be equal or omit exclude)")
+
+            # Check raw_send
+            raw_send = entry.get('raw_send')
+            if raw_send and isinstance(raw_send, list):
+                if len(raw_send) != dest_count:
+                    errors.append(f"{name}: dest has {dest_count} entries but raw_send has {len(raw_send)} "
+                                f"(must be equal or omit raw_send)")
+
+            # Check resume
+            resume = entry.get('resume')
+            if resume and isinstance(resume, list):
+                if len(resume) != dest_count:
+                    errors.append(f"{name}: dest has {dest_count} entries but resume has {len(resume)} "
+                                f"(must be equal or omit resume)")
+
+            # Check retries
+            retries = entry.get('retries')
+            if retries and isinstance(retries, list):
+                if len(retries) != dest_count:
+                    errors.append(f"{name}: dest has {dest_count} entries but retries has {len(retries)} "
+                                f"(must be equal or omit retries)")
+
+        # 4. Check SSH key files exist
+        key = entry.get('key')
+        if key and key is not None and not os.path.isfile(key):
+            errors.append(f"{name}: SSH key file not found: {key}")
+
+        # Check dest_keys files exist
+        dest_keys = entry.get('dest_keys')
+        if dest_keys and isinstance(dest_keys, list):
+            for i, key in enumerate(dest_keys):
+                if key and key is not None and not os.path.isfile(key):
+                    errors.append(f"{name}: dest_keys[{i}] file not found: {key}")
+
+        # 5. Warn if dest is set but snap is not enabled (nothing to send)
+        has_dest = dest and len(dest) > 0
+        snap_enabled = entry.get('snap') is True
+
+        # Check if any snapshot type is configured
+        has_snapshot_config = any(
+            entry.get(st) and isinstance(entry.get(st), int) and entry.get(st) > 0
+            for st in SNAPSHOT_TYPES
+        )
+
+        if has_dest and not snap_enabled and has_snapshot_config:
+            warnings.append(f"{name}: has dest configured but snap=no - no snapshots will be sent "
+                          f"(set snap=yes or remove dest)")
+
+        # 6. Warn if snap is enabled but no snapshot types configured
+        if snap_enabled and not has_snapshot_config:
+            warnings.append(f"{name}: snap=yes but no snapshot types configured "
+                          f"(set hourly, daily, weekly, etc.)")
+
+        # 7. Check max_depth is valid
+        max_depth = entry.get('max_depth')
+        if max_depth is not None and not isinstance(max_depth, int):
+            errors.append(f"{name}: max_depth must be an integer or 'no', got '{max_depth}'")
+
+    # Log all warnings
+    for warning in warnings:
+        logger.warning(f"Config validation warning: {warning}")
+
+    # Log and return errors
+    if errors:
+        for error in errors:
+            logger.error(f"Config validation error: {error}")
+
+    return errors
+
+
 def exists(executable='', ssh=None):
     """Tests if an executable exists on the system.
 
@@ -113,9 +248,17 @@ def read_config(path):
                 if option in ['key']:
                     dic[option] = value if os.path.isfile(value) else None
                 elif option in SNAPSHOT_TYPES:
-                    dic[option] = int(value)
+                    try:
+                        dic[option] = int(value)
+                    except ValueError:
+                        logger.error(f"Invalid value for {option} in section [{section}]: '{value}' (must be an integer)")
+                        return None
                 elif option in [ 'max_depth']:
-                    dic[option] = int(value) if value and value != 'no' else -1
+                    try:
+                        dic[option] = int(value) if value and value != 'no' else -1
+                    except ValueError:
+                        logger.error(f"Invalid value for max_depth in section [{section}]: '{value}' (must be an integer or 'no')")
+                        return None
                 elif option in ['snap', 'clean', 'ignore_not_existing']:
                     dic[option] = {'yes': True, 'no': False}.get(value.lower(), None)
                 elif option in ['snap_exclude_property', 'send_exclude_property']:
@@ -155,6 +298,12 @@ def read_config(path):
                     for option in ['key', 'snap', 'clean', 'ignore_not_existing', 'send_last_snapshot',
                         'max_depth', 'snap_exclude_property', 'send_exclude_property'] + list(SNAPSHOT_TYPES):
                         child[option] = child[option] if child[option] is not None else parent[option]
+
+    # Validate configuration
+    validation_errors = validate_config(config)
+    if validation_errors:
+        logger.error('Configuration validation failed with {} error(s). Please fix your config file.'.format(len(validation_errors)))
+        return None
 
     return config
 
