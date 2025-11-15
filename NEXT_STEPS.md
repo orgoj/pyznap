@@ -12,10 +12,10 @@ Provedl jsem komplexní code review projektu pyznap pomocí Claude Opus modelu. 
 - Podpora SSH remote backupů
 
 ⚠️ **Problémy:**
-- **KRITICKÉ**: Bezpečnostní rizika (command injection, SSH security)
 - **VYSOKÉ**: Chybí automatická kontrola stavu remote backupů (tvůj hlavní požadavek!)
-- **STŘEDNÍ**: Nedostatečný error recovery
-- **NÍZKÉ**: Code quality issues
+- **STŘEDNÍ**: Code quality issues (duplicity, složitost, chybějící testy)
+- **NÍZKÉ**: Bezpečnostní vylepšení (good practice, běží pod root)
+- **NÍZKÉ**: Error recovery vylepšení
 
 ### TODO položky v projektu:
 
@@ -50,15 +50,15 @@ Implementovat **nový příkaz `pyznap verify`** + integraci do `pyznap status`.
 # Základní verifikace
 pyznap verify
 
-# S auto-fixem
-pyznap verify --fix
-
 # Pro monitoring (Nagios/Prometheus)
 pyznap verify --nagios
 pyznap verify --json
 
 # Custom thresholdy
 pyznap verify --max-lag 3600  # max 1 hodina zpoždění
+
+# Pokud verify najde problémy, fix je prostě normální send:
+pyznap send
 ```
 
 #### Co bude kontrolovat:
@@ -94,24 +94,7 @@ Recommendations:
 
 ## 🚀 Doporučený plán implementace
 
-### FÁZE 1: Bezpečnost (3-4 dny) ⚠️ KRITICKÉ
-
-**Proč první:** Bezpečnostní díry jsou kritické, zejména command injection.
-
-**Úkoly:**
-1. Vytvořit `pyznap/security.py` s validation frameworkem
-2. Opravit všechny subprocess volání (přidat `shlex.quote()`)
-3. Opravit SSH socket naming (UUID místo predictable)
-4. Přidat host key verification
-5. Security testing
-
-**Soubory k editaci:**
-- `pyznap/pyzfs.py`
-- `pyznap/ssh.py`
-- `pyznap/send.py`
-- Nový: `pyznap/security.py`
-
-### FÁZE 2: Remote Snapshot Verification (4-5 dní) ⭐ TVOJE PRIORITA
+### FÁZE 1: Remote Snapshot Verification (4-5 dní) ⭐ PRIORITA
 
 **Proč důležité:** Tvůj hlavní požadavek - automatická kontrola backupů.
 
@@ -147,27 +130,51 @@ verify_partial_history() - pro nové remote
 check_latest_snapshots_transferred() - kontrola posledních snapshotů
 ```
 
-### FÁZE 3: Error Handling (2-3 dny)
+### FÁZE 2: Code Quality, Refactoring & Testing (4-5 dní) 🎯
+
+**Proč důležité:** Zlepšení udržovatelnosti a testovatelnosti kódu.
+
+**Úkoly:**
+1. **Refactoring velkých funkcí:**
+   - `send_config()` v send.py - rozdělit na menší funkce
+   - `status_filesystem()` v status.py - použít strategy pattern
+   - Centralizovat SSH connection management
+2. **Odstranění duplicit:**
+   - SSH připojení opakující se v take.py, clean.py, send.py
+   - Parsování snapshot jmen
+3. **Unit testy:**
+   - Testy pro klíčové funkce
+   - Mock ZFS a SSH
+   - pytest fixtures
+4. **Integration testy:**
+   - Docker-based ZFS testy
+5. **Dokumentace:**
+   - Docstrings pro všechny public funkce
+   - Type hints (Python 3.5+)
+   - Update README
+
+**Soubory k editaci:**
+- `pyznap/send.py` - refactoring
+- `pyznap/status.py` - refactoring
+- Nový: `pyznap/ssh_manager.py` - centralizace SSH
+- `tests/unit/` - nové unit testy
+- `tests/fixtures/` - mock helpers
+
+### FÁZE 3: Bezpečnostní vylepšení (optional, 2-3 dny)
+
+**Poznámka:** Běží pod root, takže není kritické, ale je to good practice.
+
+**Úkoly:**
+1. Input validation framework
+2. SSH socket security (UUID naming)
+3. Config file validation
+
+### FÁZE 4: Error Handling (optional, 2-3 dny)
 
 **Úkoly:**
 1. Cleanup při selhání send/receive
 2. Resume token validation
 3. Rollback mechanism
-4. Unified logging
-5. Konzistentní exit kódy
-
-**Soubory:**
-- `pyznap/send.py`
-- `pyznap/main.py`
-
-### FÁZE 4: Code Quality & Testing (4-5 dní)
-
-**Úkoly:**
-1. Refactoring velkých funkcí
-2. Odstranění duplicit
-3. Unit testy
-4. Integration testy
-5. CI/CD setup
 
 ---
 
@@ -377,13 +384,12 @@ Verify backup health:
 
 Options:
   --max-lag SECONDS     Maximum acceptable lag (default: 86400)
-  --fix                 Automatically fix issues by running send
   --json                Output as JSON
   --nagios              Nagios-compatible output
   --export-metrics      Export Prometheus metrics
 
 Example:
-    pyznap verify --max-lag 3600 --fix
+    pyznap verify --max-lag 3600
 ```
 
 ### Man page
@@ -414,7 +420,6 @@ Vytvořit `man pyznap-verify`.
 - [ ] Nový CLI příkaz v `main.py`:
   - [ ] `pyznap verify` základní
   - [ ] `--max-lag` option
-  - [ ] `--fix` option
   - [ ] `--json` output
   - [ ] `--nagios` output
   - [ ] `--export-metrics` pro Prometheus
@@ -485,9 +490,9 @@ Po implementaci budeš mít:
 ✅ **Proaktivní monitoring** - víš okamžitě když backup zaostává
 ✅ **Automatická detekce problémů** - chybějící snapshoty, broken chain
 ✅ **Flexibilní thresholdy** - přizpůsobitelné pro různé use cases
-✅ **Auto-fix možnost** - `--fix` automaticky spustí send
 ✅ **Monitoring integrace** - Nagios, Prometheus, email alerts
 ✅ **Podpora nových remote** - inteligentní handling partial history
+✅ **Snadný fix** - pokud verify najde problémy, stačí spustit `pyznap send`
 
 ---
 
