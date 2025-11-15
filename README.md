@@ -259,6 +259,34 @@ Run `pyznap -h` to see all available options.
 
   `pyznap status --raw --values 'name,zfs-origin,conf,do-*,snapshot-info-*-timestamp,snapshot-count-*,dest-0-snapshot-count*,dest-0-host,dest-0-name' | petl 'fromjson(None, lines=True).tohtml("/tmp/pyznap.html")'`
 
++ verify
+
+  Verify remote backup health and check if destinations are up-to-date.
+
+  Checks:
+  - Time lag between source and destination snapshots
+  - Existence of critical snapshots (daily, weekly, monthly)
+  - Integrity of incremental snapshot chain
+  - Intelligent handling of new remotes with partial history
+
+  Options:
+  - `--max-lag SECONDS`: Maximum acceptable lag in seconds (default: 86400 = 1 day)
+  - `--json`: Output results as JSON for programmatic use
+  - `--nagios`: Nagios-compatible output with exit codes for monitoring
+  - `--export-metrics FILE`: Export Prometheus metrics to file
+
+  Examples:
+
+    `pyznap verify`
+
+    `pyznap verify --max-lag 3600`  # Alert if lag > 1 hour
+
+    `pyznap verify --json | jq '.[] | select(.status != "OK")'`  # Filter problems
+
+    `pyznap verify --nagios`  # For Nagios/Icinga monitoring
+
+    `pyznap verify --export-metrics /var/lib/node_exporter/textfile_collector/pyznap.prom`
+
 
 #### Usage examples ####
 
@@ -297,6 +325,22 @@ Run `pyznap -h` to see all available options.
 + Backup a single filesystem and exclude some datasets:
 
     `pyznap send -s tank -d backup/tank -e '/tank/data*' '/tank/home/user1*' '*/user2/docs'`
+
++ Verify all remote backups are up-to-date:
+
+    `pyznap verify`
+
++ Check backups with 1-hour lag threshold:
+
+    `pyznap verify --max-lag 3600`
+
++ Verify and output as JSON for monitoring:
+
+    `pyznap verify --json`
+
++ Use with Nagios/Icinga for alerting:
+
+    `pyznap verify --nagios && echo "All backups OK" || echo "Backup issues detected"`
 
 #### Environment variables ####
 

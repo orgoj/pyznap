@@ -25,6 +25,7 @@ from .fix import fix_snapshots
 from .process import set_dry_run
 import pyznap.pyzfs as zfs
 from . import __version__
+from .verification import verify_remote_snapshots, Status
 
 
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
@@ -163,6 +164,16 @@ def _main():
     parser_status.add_argument('--exclude', action="append",
                              dest='filter_exclude', help='exclude name filesystems (fnmatch)')
 
+    parser_verify = subparsers.add_parser('verify', help='verify remote backup health')
+    parser_verify.add_argument('--max-lag', action="store", type=int, default=86400,
+                              dest='max_lag', help='maximum acceptable lag in seconds (default: 86400 = 1 day)')
+    parser_verify.add_argument('--json', action="store_true",
+                              dest='output_json', help='output results as JSON')
+    parser_verify.add_argument('--nagios', action="store_true",
+                              dest='output_nagios', help='Nagios-compatible output')
+    parser_verify.add_argument('--export-metrics', action="store", default=None,
+                              dest='export_metrics', help='export Prometheus metrics to file')
+
     if len(sys.argv)==1:
         parser.print_help(sys.stderr)
         sys.exit(1)
@@ -238,7 +249,7 @@ def _main():
     try:
         logger.info('Starting pyznap...')
 
-        if args.command in ('snap', 'send', 'full', 'status'):
+        if args.command in ('snap', 'send', 'full', 'status', 'verify'):
             logger.info('Read config={}'.format(config_path))
             config = read_config(config_path)
             if config == None:
@@ -325,6 +336,158 @@ def _main():
                 status_config(config, output=args.status_format, show_all=args.status_all,
                     values=tuple(args.values.split(',')) if args.values else None,
                     filter_values=filter_values, filter_exclude=args.filter_exclude, settings=settings)
+
+        elif args.command == 'verify':
+            from .send import parse_name
+            import json
+
+            results = []
+            overall_status = Status.OK
+
+            for conf in config:
+                if not conf.get('dest'):
+                    continue
+
+                source_name = conf['name']
+                logger.info(f"Verifying {source_name}...")
+
+                # Open source filesystem
+                try:
+                    _type, src_name, user, host, port = parse_name(source_name)
+                    if _type == 'ssh':
+                        from .ssh import SSH
+                        key = conf.get('key')
+                        ssh_source = SSH(user, host, port=port, key=key)
+                        source_fs = zfs.open(src_name, ssh=ssh_source)
+                    else:
+                        source_fs = zfs.open(source_name)
+                except Exception as err:
+                    logger.error(f"Cannot open source {source_name}: {err}")
+                    continue
+
+                # Verify each destination
+                for dest in conf['dest']:
+                    dest_name = dest['name'] if isinstance(dest, dict) else dest
+
+                    try:
+                        # Open destination
+                        _type, dst_name, user, host, port = parse_name(dest_name)
+                        if _type == 'ssh':
+                            from .ssh import SSH
+                            dest_keys = conf.get('dest_keys', [None])
+                            dest_key = dest_keys[0] if dest_keys else None
+                            ssh_dest = SSH(user, host, port=port, key=dest_key)
+                            dest_fs = zfs.open(dst_name, ssh=ssh_dest)
+                        else:
+                            dest_fs = zfs.open(dest_name)
+
+                        # Perform verification
+                        verification_config = {
+                            'verify_thresholds': {
+                                'ok': args.max_lag,
+                                'warning': args.max_lag * 2,
+                                'critical': args.max_lag * 7
+                            }
+                        }
+
+                        report = verify_remote_snapshots(source_fs, dest_fs, verification_config)
+
+                        results.append({
+                            'source': source_name,
+                            'dest': dest_name,
+                            'report': report
+                        })
+
+                        # Update overall status
+                        if report.status > overall_status:
+                            overall_status = report.status
+
+                    except Exception as err:
+                        logger.error(f"Verification failed for {source_name} -> {dest_name}: {err}")
+                        results.append({
+                            'source': source_name,
+                            'dest': dest_name,
+                            'error': str(err)
+                        })
+
+            # Output results
+            if args.output_json:
+                # JSON output
+                output = []
+                for result in results:
+                    if 'error' in result:
+                        output.append({
+                            'source': result['source'],
+                            'dest': result['dest'],
+                            'status': 'ERROR',
+                            'error': result['error']
+                        })
+                    else:
+                        output.append({
+                            'source': result['source'],
+                            'dest': result['dest'],
+                            **result['report'].to_dict()
+                        })
+                print(json.dumps(output, indent=2))
+
+            elif args.output_nagios:
+                # Nagios output
+                status_map = {
+                    Status.OK: 0,
+                    Status.WARNING: 1,
+                    Status.ERROR: 2,
+                    Status.CRITICAL: 2,
+                    Status.UNKNOWN: 3
+                }
+
+                exit_code = status_map.get(overall_status, 3)
+
+                # Count OK vs total
+                ok_count = sum(1 for r in results if 'error' not in r and r['report'].status == Status.OK)
+                total_count = len(results)
+
+                status_msg = f"PYZNAP {overall_status.value}: {ok_count}/{total_count} destinations OK"
+                print(status_msg)
+
+                sys.exit(exit_code)
+
+            else:
+                # Human-readable output
+                print("\n" + "="*80)
+                print("PYZNAP REMOTE BACKUP VERIFICATION REPORT")
+                print("="*80 + "\n")
+
+                for result in results:
+                    source = result['source']
+                    dest = result['dest']
+
+                    print(f"Source: {source}")
+                    print(f"Destination: {dest}")
+                    print("-" * 80)
+
+                    if 'error' in result:
+                        print(f"❌ ERROR: {result['error']}\n")
+                    else:
+                        report = result['report']
+                        print(report.format_human_readable())
+                        print()
+
+            # Export Prometheus metrics if requested
+            if args.export_metrics:
+                with open(args.export_metrics, 'w') as f:
+                    for result in results:
+                        if 'error' not in result:
+                            report = result['report']
+                            source = result['source'].replace('/', '_')
+                            dest = result['dest'].replace('/', '_')
+                            labels = f'source="{source}",dest="{dest}"'
+
+                            f.write(f'pyznap_backup_lag_seconds{{{labels}}} {report.lag_seconds}\n')
+
+                            status_code = {'OK': 0, 'WARNING': 1, 'ERROR': 2, 'CRITICAL': 3}.get(report.status.value, 3)
+                            f.write(f'pyznap_backup_status{{{labels}}} {status_code}\n')
+
+                logger.info(f"Metrics exported to {args.export_metrics}")
 
         zfs.STATS.log()
         logger.info('Finished successfully...')
