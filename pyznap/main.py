@@ -174,6 +174,8 @@ def _main():
     parser_verify.add_argument('--export-metrics', action="store", default=None,
                               dest='export_metrics', help='export Prometheus metrics to file')
 
+    parser_validate = subparsers.add_parser('validate-config', help='validate configuration file')
+
     if len(sys.argv)==1:
         parser.print_help(sys.stderr)
         sys.exit(1)
@@ -488,6 +490,28 @@ def _main():
                             f.write(f'pyznap_backup_status{{{labels}}} {status_code}\n')
 
                 logger.info(f"Metrics exported to {args.export_metrics}")
+
+        elif args.command == 'validate-config':
+            # Config already loaded and validated above
+            # If we got here, config is valid
+            logger.info('Configuration validation successful!')
+            print('✓ Configuration is valid')
+            print(f'  - Loaded {len(config)} filesystem(s) from config')
+
+            # Show summary
+            for conf in config:
+                name = conf['name'] if conf['name'] else '//'
+                snap_types = [st for st in ('frequent', 'hourly', 'daily', 'weekly', 'monthly', 'yearly')
+                             if conf.get(st) and conf.get(st) > 0]
+                dest = conf.get('dest')
+                dest_count = len(dest) if dest else 0
+
+                print(f'\n  {name}:')
+                if snap_types:
+                    print(f'    Snapshots: {", ".join(st + "=" + str(conf[st]) for st in snap_types)}')
+                print(f'    snap={conf.get("snap")}, clean={conf.get("clean")}')
+                if dest_count > 0:
+                    print(f'    Destinations: {dest_count}')
 
         zfs.STATS.log()
         logger.info('Finished successfully...')
