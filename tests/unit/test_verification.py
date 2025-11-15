@@ -362,12 +362,12 @@ class TestVerifyRemoteSnapshots:
         # Source has recent snapshot
         source_fs = create_mock_filesystem_with_snapshots('tank/data', [
             (1, 'hourly'),
-            (25, 'daily'),
+            (23, 'daily'),  # 23 hours ago to stay below WARNING threshold
         ])
 
         # Dest missing the recent snapshot
         dest_fs = create_mock_filesystem_with_snapshots('backup/data', [
-            (25, 'daily'),
+            (23, 'daily'),  # 22 hour lag (23-1) is within WARNING range
         ])
 
         config = {
@@ -456,9 +456,10 @@ class TestVerifyRemoteSnapshots:
             (73, 'daily'),
         ])
 
-        # Dest missing middle snapshots
+        # Dest has oldest and one middle snapshot, missing 1h and 25h
         source_snaps = source_fs.snapshots()
-        dest_snaps = [source_snaps[0], source_snaps[3]]  # Only first and last
+        # Get snapshots in reverse order (oldest first)
+        dest_snaps = [source_snaps[3], source_snaps[2]]  # 73h and 49h (missing 25h and 1h)
 
         # Create new mock snapshots for dest with different filesystem name
         dest_snap_list = []
@@ -467,11 +468,11 @@ class TestVerifyRemoteSnapshots:
             new_snap = create_mock_snapshot(
                 'backup/data',
                 hours_ago=0,
-                snap_type=s._snapshot_name.split('_')[-1]
+                snap_type=s.snapshot_name.split('_')[-1]
             )
             # Keep the same snapshot name
-            new_snap._snapshot_name = s._snapshot_name
-            new_snap.name = f"backup/data@{s._snapshot_name}"
+            new_snap.snapshot_name = s.snapshot_name
+            new_snap.name = f"backup/data@{s.snapshot_name}"
             new_snap._creation_time = s._creation_time
             new_snap._timestamp = s._timestamp
             dest_snap_list.append(new_snap)
@@ -488,7 +489,7 @@ class TestVerifyRemoteSnapshots:
 
         report = verify_remote_snapshots(source_fs, dest_fs, config)
 
-        # Should have warnings about missing incrementals
+        # Should have warnings about missing incrementals (25h and 1h missing)
         assert len(report.missing_snapshots) > 0
         assert any('incremental' in w.lower() for w in report.warnings)
 

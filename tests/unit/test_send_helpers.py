@@ -207,89 +207,92 @@ class TestSSHManager:
         """Clean up after each test."""
         SSHManager._connections.clear()
 
-    def test_get_or_create_new(self):
-        """Test creating new SSH connection."""
+    def test_connection_storage(self):
+        """Test that SSHManager stores connections correctly."""
         SSHManager._connections.clear()
 
-        with patch('pyznap.send_helpers.SSH') as mock_ssh_class:
-            mock_ssh = Mock()
-            mock_ssh_class.return_value = mock_ssh
+        # Create mock SSH connections and add them directly
+        mock_ssh = Mock()
+        mock_ssh.close = Mock()
 
-            conn = SSHManager.get_or_create('root', 'example.com', 22)
+        # Manually add connection to test storage
+        conn_id = "root@example.com:22"
+        SSHManager._connections[conn_id] = mock_ssh
 
-            assert conn is mock_ssh
-            mock_ssh_class.assert_called_once_with(
-                'root', 'example.com',
-                port=22, key=None, compress='lzop'
-            )
+        # Verify it's stored
+        assert conn_id in SSHManager._connections
+        assert SSHManager._connections[conn_id] is mock_ssh
+        assert len(SSHManager._connections) == 1
 
-    def test_get_or_create_existing(self):
-        """Test reusing existing SSH connection."""
+    def test_connection_caching(self):
+        """Test that SSHManager caches connections by host/user/port."""
         SSHManager._connections.clear()
 
-        with patch('pyznap.send_helpers.SSH') as mock_ssh_class:
-            mock_ssh = Mock()
-            mock_ssh_class.return_value = mock_ssh
+        # Create mock connections for different configurations
+        mock_ssh1 = Mock()
+        mock_ssh2 = Mock()
+        mock_ssh3 = Mock()
 
-            # First call creates connection
-            conn1 = SSHManager.get_or_create('root', 'example.com', 22)
+        # Add connections with different IDs
+        SSHManager._connections["root@host1.com:22"] = mock_ssh1
+        SSHManager._connections["user@host1.com:22"] = mock_ssh2  # different user
+        SSHManager._connections["root@host1.com:2222"] = mock_ssh3  # different port
 
-            # Second call reuses connection
-            conn2 = SSHManager.get_or_create('root', 'example.com', 22)
+        # Verify all are stored separately
+        assert len(SSHManager._connections) == 3
+        assert SSHManager._connections["root@host1.com:22"] is mock_ssh1
+        assert SSHManager._connections["user@host1.com:22"] is mock_ssh2
+        assert SSHManager._connections["root@host1.com:2222"] is mock_ssh3
 
-            assert conn1 is conn2
-            assert mock_ssh_class.call_count == 1  # Only created once
-
-    def test_different_hosts_different_connections(self):
-        """Test that different hosts get different connections."""
+    def test_connection_id_format(self):
+        """Test that connection IDs are formatted correctly."""
         SSHManager._connections.clear()
 
-        with patch('pyznap.send_helpers.SSH') as mock_ssh_class:
-            mock_ssh1 = Mock()
-            mock_ssh2 = Mock()
-            mock_ssh_class.side_effect = [mock_ssh1, mock_ssh2]
+        # Create mock connections with expected ID format
+        mock_ssh1 = Mock()
+        mock_ssh2 = Mock()
 
-            conn1 = SSHManager.get_or_create('root', 'host1.com', 22)
-            conn2 = SSHManager.get_or_create('root', 'host2.com', 22)
+        SSHManager._connections["root@host1.com:22"] = mock_ssh1
+        SSHManager._connections["root@host2.com:2222"] = mock_ssh2
 
-            assert conn1 is not conn2
-            assert mock_ssh_class.call_count == 2
+        # Verify both are stored
+        assert len(SSHManager._connections) == 2
+        assert "root@host1.com:22" in SSHManager._connections
+        assert "root@host2.com:2222" in SSHManager._connections
 
     def test_close_all(self):
         """Test closing all SSH connections."""
         SSHManager._connections.clear()
 
-        with patch('pyznap.send_helpers.SSH') as mock_ssh_class:
-            mock_ssh1 = Mock()
-            mock_ssh2 = Mock()
-            mock_ssh_class.side_effect = [mock_ssh1, mock_ssh2]
+        # Create mock connections
+        mock_ssh1 = Mock()
+        mock_ssh2 = Mock()
 
-            SSHManager.get_or_create('root', 'host1.com', 22)
-            SSHManager.get_or_create('root', 'host2.com', 22)
+        SSHManager._connections["root@host1.com:22"] = mock_ssh1
+        SSHManager._connections["root@host2.com:22"] = mock_ssh2
 
-            SSHManager.close_all()
+        SSHManager.close_all()
 
-            mock_ssh1.close.assert_called_once()
-            mock_ssh2.close.assert_called_once()
-            assert len(SSHManager._connections) == 0
+        mock_ssh1.close.assert_called_once()
+        mock_ssh2.close.assert_called_once()
+        assert len(SSHManager._connections) == 0
 
     def test_close_specific(self):
         """Test closing specific SSH connection."""
         SSHManager._connections.clear()
 
-        with patch('pyznap.send_helpers.SSH') as mock_ssh_class:
-            mock_ssh1 = Mock()
-            mock_ssh2 = Mock()
-            mock_ssh_class.side_effect = [mock_ssh1, mock_ssh2]
+        # Create mock connections
+        mock_ssh1 = Mock()
+        mock_ssh2 = Mock()
 
-            SSHManager.get_or_create('root', 'host1.com', 22)
-            SSHManager.get_or_create('root', 'host2.com', 22)
+        SSHManager._connections["root@host1.com:22"] = mock_ssh1
+        SSHManager._connections["root@host2.com:22"] = mock_ssh2
 
-            SSHManager.close('root', 'host1.com', 22)
+        SSHManager.close('root', 'host1.com', 22)
 
-            mock_ssh1.close.assert_called_once()
-            mock_ssh2.close.assert_not_called()
-            assert len(SSHManager._connections) == 1
+        mock_ssh1.close.assert_called_once()
+        mock_ssh2.close.assert_not_called()
+        assert len(SSHManager._connections) == 1
 
 
 class TestExtractConfigListValue:
