@@ -230,7 +230,7 @@ Run `pyznap -h` to see all available options.
 
     Send snapshots to backup locations according to policy.
 
-  + -s SOURCE -d DESTINATION [-c COMPRESSION] [-i KEYFILE] [-j SOURCE_KEY] [-k DEST_KEY] [-e EXCLUDE] [-w] [-r] [-l] [--dest-auto-create] [--retries RETRIES] [--retry-interval RETRY_INTERVAL]
+  + -s SOURCE -d DESTINATION [-c COMPRESSION] [-i KEYFILE] [-j SOURCE_KEY] [-k DEST_KEY] [-e EXCLUDE] [-w] [-r] [-l] [--dest-auto-create] [--retries RETRIES] [--retry-interval RETRY_INTERVAL] [--single-snapshots]
 
     Send source filesystem to destination filesystem. If either source OR dest is a remote location,
     you can specify the keyfile with the `-i` flag. If both source AND dest are remote, you specify
@@ -244,7 +244,8 @@ Run `pyznap -h` to see all available options.
     Flag `-l` start sendig from last snapshot. You can specify a number of retries on connection
     issues with the `--retries` option, and set the retry interval with `--retry-interval`. Normally
     pyznap will not create missing root datasets, but you can set the `--dest-auto-create` flag to
-    automatically create it.
+    automatically create it. If you have broken snapshot chains (ZFS reports "warning: cannot send:
+    Invalid argument"), use `--single-snapshots` to send snapshots one by one, skipping the broken ones.
 
 + full
 
@@ -341,6 +342,10 @@ Run `pyznap -h` to see all available options.
 + Use with Nagios/Icinga for alerting:
 
     `pyznap verify --nagios && echo "All backups OK" || echo "Backup issues detected"`
+
++ Send with broken snapshot chain (skipping corrupted snapshots):
+
+    `pyznap -v send -m '*/tank/data/problem' --single-snapshots`
 
 #### Environment variables ####
 

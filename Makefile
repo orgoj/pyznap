@@ -1,30 +1,53 @@
-.PHONY: all install-dev test release release-test clean
+.PHONY: all install-dev test test-all lint format clean release release-test
 
-all: test
+all: lint test
 
+# Development setup
 install-dev:
 	pip install -e .[dev]
+	pre-commit install
 
-test: clean install-dev
-	pytest
+# Testing
+test:
+	pytest tests/ -m "not slow" -v
 
+test-all:
+	pytest tests/ -v
+
+# Code quality
+lint:
+	ruff check pyznap/ tests/
+
+format:
+	ruff format pyznap/ tests/
+	ruff check --fix pyznap/ tests/
+
+format-check:
+	ruff format --check pyznap/ tests/
+	ruff check pyznap/ tests/
+
+# Release
 release:
-	pip install twine
-	python setup.py sdist bdist_wheel
+	pip install twine build
+	python -m build
 	twine upload dist/*
-	rm -f -r build/ dist/ pyznap.egg-info/
+	rm -rf build/ dist/ *.egg-info/
 
 release-test:
-	pip install twine
-	python setup.py sdist bdist_wheel
+	pip install twine build
+	python -m build
 	twine upload --repository-url https://test.pypi.org/legacy/ dist/*
-	rm -f -r build/ dist/ pyznap.egg-info/
+	rm -rf build/ dist/ *.egg-info/
 
+# Cleanup
 clean:
-	rm -f -r build/
-	rm -f -r dist/
-	rm -f -r pyznap/__pycache__/
-	rm -f -r tests/__pycache__
-	rm -f -r pyznap.egg-info/
-	rm -f -r .pytest_cache/
-	rm -f -r .cache/
+	rm -rf build/
+	rm -rf dist/
+	rm -rf *.egg-info/
+	rm -rf pyznap/__pycache__/
+	rm -rf tests/__pycache__/
+	rm -rf .pytest_cache/
+	rm -rf .ruff_cache/
+	rm -rf .cache/
+	find . -type f -name "*.pyc" -delete
+	find . -type d -name "__pycache__" -delete

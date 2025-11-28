@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyznap"
+dynamic = ["version"]
+description = "ZFS snapshot tool written in Python"
+readme = "README.md"
+license = {text = "GPLv3"}
+authors = [
+    {name = "Yannick Boetzel", email = "github@boetzel.ch"}
+]
+keywords = ["zfs", "snapshot", "backup"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: Unix",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Archiving :: Backup",
+    "Topic :: System :: Filesystems",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "errorhandler",
+    "psutil",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-dependency",
+    "paramiko>=2.4.2",
+    "ruff",
+    "pre-commit",
+]
+
+[project.scripts]
+pyznap = "pyznap.main:main"
+
+[project.urls]
+Homepage = "https://github.com/yboetz/pyznap"
+
+[tool.setuptools.dynamic]
+version = {attr = "pyznap.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["pyznap*"]
+
+[tool.setuptools.package-data]
+pyznap = ["config/*"]
+
+[tool.pytest.ini_options]
+addopts = "-v -m 'not slow'"
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (require ZFS + root)",
+]
+
+[tool.ruff]
+target-version = "py38"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "W291",   # trailing whitespace
+    "W293",   # blank line contains whitespace
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "C4"]
+
+[tool.ruff.format]
+quote-style = "single"

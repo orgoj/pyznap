@@ -21,7 +21,7 @@ import pyznap.pyzfs as zfs
 from .process import get_dry_run, DatasetBusyError, DatasetNotFoundError, DatasetExistsError
 
 
-def send_snap(snapshot, dest_name, base=None, ssh_dest=None, raw=False, resume=False, resume_token=None):
+def send_snap(snapshot, dest_name, base=None, ssh_dest=None, raw=False, resume=False, resume_token=None, intermediates=True):
     """Sends snapshot to destination, incrementally and over ssh if specified.
 
     Parameters:
@@ -34,6 +34,8 @@ def send_snap(snapshot, dest_name, base=None, ssh_dest=None, raw=False, resume=F
         Base snapshot for incremental stream (the default is None, meaning a full stream)
     ssh_dest : {ssh.SSH}, optional
         Open ssh connection for remote backup (the default is None, meaning local backup)
+    intermediates : {bool}, optional
+        Include intermediate snapshots with -I (default True), or skip them with -i (False)
 
     Returns
     -------
@@ -58,20 +60,31 @@ def send_snap(snapshot, dest_name, base=None, ssh_dest=None, raw=False, resume=F
             ))
             return 0
 
-        send = snapshot.send(ssh_dest=ssh_dest, base=base, intermediates=True, raw=raw, resume_token=resume_token)
+        send = snapshot.send(ssh_dest=ssh_dest, base=base, intermediates=intermediates, raw=raw, resume_token=resume_token)
         recv = zfs.receive(name=dest_name, stdin=send.stdout, ssh=ssh_dest, ssh_source=ssh_source,
                            force=True, nomount=True, stream_size=stream_size, raw=raw, resume=resume)
         send.stdout.close()
 
-        # write pv output to stderr / stdout
+        # write pv output to stderr / stdout and capture warnings
+        zfs_warnings = []
         for line in TextIOWrapper(send.stderr, newline='\r'):
+            line_stripped = line.rstrip()
+            # Capture ZFS warnings for logging
+            if line_stripped.startswith('warning:'):
+                zfs_warnings.append(line_stripped)
             if sys.stdout.isatty():
                 sys.stderr.write('  ' + line)
                 sys.stderr.flush()
-            elif line.rstrip():     # is stdout is redirected, write pv to stdout
-                sys.stdout.write('  ' + line.rstrip() + '\n')
+            elif line_stripped:     # is stdout is redirected, write pv to stdout
+                sys.stdout.write('  ' + line_stripped + '\n')
                 sys.stdout.flush()
         send.stderr.close()
+
+        # Log any ZFS warnings that were captured
+        if zfs_warnings:
+            logger.warning('ZFS send warnings for {:s}:'.format(dest_name_log))
+            for warn in zfs_warnings:
+                logger.warning('  {}'.format(warn))
 
         stdout, stderr = recv.communicate()
         # raise any error that occurred
@@ -245,6 +258,149 @@ def send_filesystem(source_fs, dest_name, ssh_dest=None, raw=False, resume=False
     return 0
 
 
+def send_filesystem_stepwise(source_fs, dest_name, ssh_dest=None, raw=False, resume=False, send_last_snapshot=False, dest_auto_create=False):
+    """Sends snapshots one by one (for broken snapshot chains).
+
+    Instead of using 'zfs send -I' which includes all intermediate snapshots,
+    sends each snapshot individually with 'zfs send -i'. If a snapshot fails,
+    it is skipped and the next one is attempted.
+
+    Parameters:
+    ----------
+    source_fs : {ZFSFilesystem}
+        Source zfs filesystem from where to send
+    dest_name : {str}
+        Name of the location to send to
+    ssh_dest : {ssh.SSH}, optional
+        Open ssh connection for remote backup
+    raw : {bool}, optional
+        Use raw send
+    resume : {bool}, optional
+        Use resumable send
+    send_last_snapshot : {str}, optional
+        Start from snapshot containing this string
+    dest_auto_create : {bool}, optional
+        Create destination if it doesn't exist
+
+    Returns
+    -------
+    int
+        0 if success (at least partially), 1 if complete failure
+    """
+
+    logger = logging.getLogger(__name__)
+    dest_name_log = '{:s}@{:s}:{:s}'.format(ssh_dest.user, ssh_dest.host, dest_name) if ssh_dest else dest_name
+
+    logger.info('Stepwise sending {} to {:s}...'.format(source_fs, dest_name_log))
+
+    # Check if dest already has a 'zfs receive' ongoing
+    if check_recv(dest_name, ssh=ssh_dest):
+        return 1
+
+    # Get snapshots on source
+    try:
+        snapshots = source_fs.snapshots()[::-1]  # newest first
+    except (DatasetNotFoundError, DatasetBusyError) as err:
+        logger.error('Error while opening source {}: {}...'.format(source_fs, err))
+        return 1
+    except CalledProcessError as err:
+        message = err.stderr.rstrip()
+        logger.error('Error while opening source {}: \'{:s}\'...'.format(source_fs, message))
+        return 1
+
+    if not snapshots:
+        logger.error('No snapshots on {}, cannot send...'.format(source_fs))
+        return 1
+
+    snapnames = [snap.name.split('@')[1] for snap in snapshots]
+    target_snapshot = snapshots[0]  # Most recent
+
+    # Open or create destination
+    try:
+        dest_fs = zfs.open(dest_name, ssh=ssh_dest)
+        dest_snapnames = [snap.name.split('@')[1] for snap in dest_fs.snapshots()]
+    except DatasetNotFoundError:
+        if dest_auto_create:
+            logger.info('Destination {:s} does not exist, will create it...'.format(dest_name_log))
+            if create_dataset(dest_name, dest_name_log, ssh=ssh_dest):
+                return 1
+            dest_snapnames = []
+        else:
+            logger.error('Destination {:s} does not exist, manually create it or use "dest-auto-create" option...'.format(dest_name_log))
+            return 1
+    except CalledProcessError as err:
+        logger.error('Error while opening dest {:s}: \'{:s}\'...'.format(dest_name_log, err.stderr.rstrip()))
+        return 1
+
+    # Find common snapshots
+    common = set(snapnames) & set(dest_snapnames)
+
+    if not common:
+        if dest_snapnames:
+            logger.error('No common snapshots on {:s}, but snapshots exist. Not sending...'.format(dest_name_log))
+            return 1
+        else:
+            # Send first snapshot (oldest or send_last_snapshot)
+            if send_last_snapshot:
+                base = target_snapshot
+                for snap in snapshots:
+                    if send_last_snapshot in snap.name.split('@')[1]:
+                        base = snap
+                        break
+            else:
+                base = snapshots[-1]  # oldest
+            logger.info('No common snapshots on {:s}, sending initial snapshot {}...'.format(dest_name_log, base))
+            rc = send_snap(base, dest_name, base=None, ssh_dest=ssh_dest, raw=raw, resume=resume)
+            if rc:
+                logger.error('Failed to send initial snapshot, cannot continue stepwise send...')
+                return 1
+            # Update common after sending first snapshot
+            dest_snapnames = [snap.name.split('@')[1] for snap in zfs.open(dest_name, ssh=ssh_dest).snapshots()]
+            common = set(snapnames) & set(dest_snapnames)
+
+    # Find base snapshot (most recent common)
+    base_snap = next(filter(lambda x: x.name.split('@')[1] in common, snapshots), None)
+
+    if base_snap.name == target_snapshot.name:
+        logger.info('{:s} is up to date...'.format(dest_name_log))
+        return 0
+
+    # Get list of snapshots to send (from base to target, in order)
+    base_idx = snapshots.index(base_snap)
+    snapshots_to_send = snapshots[:base_idx][::-1]  # reverse to get oldest first
+
+    logger.info('Sending {:d} snapshots one by one from {} to {}...'.format(
+        len(snapshots_to_send), base_snap.name.split('@')[1], target_snapshot.name.split('@')[1]))
+
+    zfs.STATS.add('zfs_send_filesystem_count')
+
+    success_count = 0
+    fail_count = 0
+    current_base = base_snap
+
+    for snap in snapshots_to_send:
+        snap_name = snap.name.split('@')[1]
+        logger.info('  Sending snapshot {} (base: {})...'.format(snap_name, current_base.name.split('@')[1]))
+
+        rc = send_snap(snap, dest_name, base=current_base, ssh_dest=ssh_dest, raw=raw, resume=resume, intermediates=False)
+
+        if rc == 0:
+            success_count += 1
+            current_base = snap  # Use this as base for next snapshot
+        else:
+            fail_count += 1
+            logger.warning('  Skipping snapshot {} (send failed)...'.format(snap_name))
+            # Don't update current_base - next snapshot will try from same base
+
+    logger.info('Stepwise send completed: {:d} sent, {:d} skipped...'.format(success_count, fail_count))
+
+    if success_count > 0:
+        zfs.STATS.add('zfs_send_changed_count')
+        return 0
+    else:
+        return 1
+
+
 def send_config(config, settings={}):
     """Tries to sync all entries in the config to their dest. Finds all children of the filesystem
     and calls send_filesystem on each of them.
@@ -378,8 +534,12 @@ def send_config(config, settings={}):
                     continue
                 # TODO: create missing skipped filesystem on destination
                 # send not excluded filesystems
+                # Choose send function based on single_snapshots setting
+                single_snapshots = settings.get('single_snapshots', False)
+                send_func = send_filesystem_stepwise if single_snapshots else send_filesystem
+
                 for retry in range(1,retries+2):
-                    rc = send_filesystem(source_fs, dest_name, ssh_dest=ssh_dest, raw=raw, resume=resume,
+                    rc = send_func(source_fs, dest_name, ssh_dest=ssh_dest, raw=raw, resume=resume,
                         send_last_snapshot=send_last_snapshot, dest_auto_create=dest_auto_create)
                     if rc == 2 and retry <= retries:
                         logger.info('Retrying send in {:d}s (retry {:d} of {:d})...'.format(retry_interval, retry, retries))

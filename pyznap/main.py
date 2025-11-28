@@ -139,6 +139,9 @@ def _main():
     parser_send.add_argument('--max-depth', action="store", type=int,
                              dest='max_depth',
                              help='define max depth for child recursion (0 no child, default infinite depth)')
+    parser_send.add_argument('--single-snapshots', action="store_true",
+                             dest='single_snapshots',
+                             help='send snapshots one by one instead of -I (for broken snapshot chains)')
 
     parser_fix = subparsers.add_parser('fix', help='fix zfs snapshot from other format to pyznap')
     parser_fix.add_argument('-t', '--type', action="store",
@@ -306,6 +309,7 @@ def _main():
 
         elif args.command == 'send':
             output_handler = OutputHandler(args.output_format, 'send') if args.output_format != 'log' else None
+            settings['single_snapshots'] = getattr(args, 'single_snapshots', False)
 
             if args.source and args.dest:
                 # use args.key if either source or dest is remote
