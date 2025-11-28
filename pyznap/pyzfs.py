@@ -51,6 +51,14 @@ class STATS:
         if 'send_size' in cls.data:
             logger.info('SEND_SIZE: '+bytes_fmt(cls.data['send_size']))
 
+    @classmethod
+    def to_dict(cls):
+        """Return stats as a dictionary for JSON output."""
+        result = dict(cls.data)
+        if 'send_size' in result:
+            result['send_size_formatted'] = bytes_fmt(result['send_size'])
+        return result
+
 
 
 def _find(path=None, ssh=None, max_depth=None, types=[]):

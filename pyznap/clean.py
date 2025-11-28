@@ -17,32 +17,56 @@ import pyznap.pyzfs as zfs
 from .process import DatasetBusyError, DatasetNotFoundError
 
 
-def clean_snap(snap):
+def clean_snap(snap, output_handler=None):
     """Deletes a snapshot
 
     Parameters
     ----------
     snap : {ZFSSnapshot}
         Snapshot to destroy
+    output_handler : {OutputHandler}, optional
+        Output handler for JSON output
+
+    Returns
+    -------
+    dict
+        Operation result
     """
 
     logger = logging.getLogger(__name__)
 
     logger.info('Deleting snapshot {}...'.format(snap))
+
+    operation = {
+        'action': 'delete',
+        'snapshot': str(snap),
+        'status': 'success',
+        'error': None
+    }
+
     try:
         snap.destroy()
     except DatasetBusyError as err:
         logger.error(err)
+        operation['status'] = 'error'
+        operation['error'] = str(err)
     except CalledProcessError as err:
-        logger.error('Error while deleting snapshot {}: \'{:s}\'...'
-                     .format(snap, err.stderr.rstrip()))
+        logger.error('Error while deleting snapshot {}: \'{}\'...'.format(snap, err.stderr.rstrip()))
+        operation['status'] = 'error'
+        operation['error'] = err.stderr.rstrip()
     except KeyboardInterrupt:
-        logger.error('KeyboardInterrupt while cleaning snapshot {}...'
-                     .format(snap))
+        logger.error('KeyboardInterrupt while cleaning snapshot {}...'.format(snap))
+        operation['status'] = 'error'
+        operation['error'] = 'KeyboardInterrupt'
         raise
 
+    if output_handler:
+        output_handler.add_operation(operation)
 
-def clean_filesystem(filesystem, conf):
+    return operation
+
+
+def clean_filesystem(filesystem, conf, output_handler=None):
     """Deletes snapshots of a single filesystem according to conf.
 
     Parameters:
@@ -51,6 +75,8 @@ def clean_filesystem(filesystem, conf):
         Filesystem to clean
     conf : {dict}
         Config entry with snapshot strategy
+    output_handler : {OutputHandler}, optional
+        Output handler for JSON output
     """
 
     logger = logging.getLogger(__name__)
@@ -80,10 +106,10 @@ def clean_filesystem(filesystem, conf):
 
     for stype in reversed(SNAPSHOT_TYPES):
         for snap in snapshots[stype][conf[stype]:]:
-            clean_snap(snap)
+            clean_snap(snap, output_handler)
 
 
-def clean_config(config, settings={}):
+def clean_config(config, settings={}, output_handler=None):
     """Deletes old snapshots according to strategies given in config. Goes through each config,
     opens up ssh connection if necessary and then recursively calls clean_filesystem.
 
@@ -91,6 +117,10 @@ def clean_config(config, settings={}):
     ----------
     config : {list of dict}
         Full config list containing all strategies for different filesystems
+    settings : {dict}, optional
+        Additional settings
+    output_handler : {OutputHandler}, optional
+        Output handler for JSON output
     """
 
     logger = logging.getLogger(__name__)
@@ -138,13 +168,13 @@ def clean_config(config, settings={}):
                          .format(name_log, err.stderr.rstrip()))
         else:
             # Clean snapshots of parent filesystem - ignore exclude property for top fs
-            clean_filesystem(children[0], conf)
+            clean_filesystem(children[0], conf, output_handler)
             # Clean snapshots of all children that don't have a seperate config entry
             for child in children[1:]:
                 if snap_exclude_property and child.ispropval(snap_exclude_property, check='false'):
                     logger.debug('Ignore dataset {:s}, have property {:s}=false'.format(child.name, snap_exclude_property))
                 else:
-                    clean_filesystem(child, conf)
+                    clean_filesystem(child, conf, output_handler)
         finally:
             if ssh:
                 ssh.close()

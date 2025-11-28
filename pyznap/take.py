@@ -17,7 +17,7 @@ import pyznap.pyzfs as zfs
 from .process import DatasetBusyError, DatasetNotFoundError, DatasetExistsError
 
 
-def take_snap(filesystem, _type):
+def take_snap(filesystem, _type, output_handler=None):
     """Takes a snapshot of type '_type'
 
     Parameters
@@ -26,28 +26,56 @@ def take_snap(filesystem, _type):
         Filesystem to take snapshot of
     _type : {str}
         Type of snapshot to take
+    output_handler : {OutputHandler}, optional
+        Output handler for JSON output
+
+    Returns
+    -------
+    dict or None
+        Operation result if output_handler is provided
     """
 
     logger = logging.getLogger(__name__)
     now = datetime.now
 
     snapname = lambda _type: 'pyznap_{:s}_{:s}'.format(now().strftime('%Y-%m-%d_%H:%M:%S'), _type)
+    snap_full_name = '{}@{:s}'.format(filesystem, snapname(_type))
 
-    logger.info('Taking snapshot {}@{:s}...'.format(filesystem, snapname(_type)))
+    logger.info('Taking snapshot {}...'.format(snap_full_name))
+
+    operation = {
+        'action': 'create',
+        'filesystem': str(filesystem),
+        'snapshot': snapname(_type),
+        'type': _type,
+        'status': 'success',
+        'error': None
+    }
+
     try:
         filesystem.snapshot(snapname=snapname(_type))
     except (DatasetBusyError, DatasetExistsError) as err:
         logger.error(err)
+        operation['status'] = 'error'
+        operation['error'] = str(err)
     except CalledProcessError as err:
-        logger.error('Error while taking snapshot {}@{:s}: \'{:s}\'...'
-                     .format(filesystem, snapname(_type), err.stderr.rstrip()))
+        error_msg = 'Error while taking snapshot {}: \'{}\'...'.format(snap_full_name, err.stderr.rstrip())
+        logger.error(error_msg)
+        operation['status'] = 'error'
+        operation['error'] = err.stderr.rstrip()
     except KeyboardInterrupt:
-        logger.error('KeyboardInterrupt while taking snapshot {}@{:s}...'
-                     .format(filesystem, snapname(_type)))
+        logger.error('KeyboardInterrupt while taking snapshot {}...'.format(snap_full_name))
+        operation['status'] = 'error'
+        operation['error'] = 'KeyboardInterrupt'
         raise
 
+    if output_handler:
+        output_handler.add_operation(operation)
 
-def take_filesystem(filesystem, conf):
+    return operation
+
+
+def take_filesystem(filesystem, conf, output_handler=None):
     """Takes snapshots of a single filesystem according to conf.
 
     Parameters:
@@ -56,6 +84,8 @@ def take_filesystem(filesystem, conf):
         Filesystem to take snapshot of
     conf : {dict}
         Config entry with snapshot strategy
+    output_handler : {OutputHandler}, optional
+        Output handler for JSON output
     """
 
     logger = logging.getLogger(__name__)
@@ -87,41 +117,45 @@ def take_filesystem(filesystem, conf):
 
     if conf['yearly'] and (not snapshots['yearly'] or
                            snapshots['yearly'][0][1].year != now().year):
-        take_snap(filesystem, 'yearly')
+        take_snap(filesystem, 'yearly', output_handler)
 
     if conf['monthly'] and (not snapshots['monthly'] or
                             snapshots['monthly'][0][1].month != now().month or
                             now() - snapshots['monthly'][0][1] > timedelta(days=31)):
-        take_snap(filesystem, 'monthly')
+        take_snap(filesystem, 'monthly', output_handler)
 
     if conf['weekly'] and (not snapshots['weekly'] or
                            snapshots['weekly'][0][1].isocalendar()[1] != now().isocalendar()[1] or
                            now() - snapshots['weekly'][0][1] > timedelta(days=7)):
-        take_snap(filesystem, 'weekly')
+        take_snap(filesystem, 'weekly', output_handler)
 
     if conf['daily'] and (not snapshots['daily'] or
                           snapshots['daily'][0][1].day != now().day or
                           now() - snapshots['daily'][0][1] > timedelta(days=1)):
-        take_snap(filesystem, 'daily')
+        take_snap(filesystem, 'daily', output_handler)
 
     if conf['hourly'] and (not snapshots['hourly'] or
                            snapshots['hourly'][0][1].hour != now().hour or
                            now() - snapshots['hourly'][0][1] > timedelta(hours=1)):
-        take_snap(filesystem, 'hourly')
+        take_snap(filesystem, 'hourly', output_handler)
 
     if conf['frequent'] and (not snapshots['frequent'] or
                              snapshots['frequent'][0][1].minute != now().minute or
                              now() - snapshots['frequent'][0][1] > timedelta(minutes=1)):
-        take_snap(filesystem, 'frequent')
+        take_snap(filesystem, 'frequent', output_handler)
 
 
-def take_config(config, settings={}):
+def take_config(config, settings={}, output_handler=None):
     """Takes snapshots according to strategy given in config.
 
     Parameters:
     ----------
     config : {list of dict}
         Full config list containing all strategies for different filesystems
+    settings : {dict}, optional
+        Additional settings
+    output_handler : {OutputHandler}, optional
+        Output handler for JSON output
     """
 
     logger = logging.getLogger(__name__)
@@ -170,13 +204,13 @@ def take_config(config, settings={}):
             continue
         else:
             # Take recursive snapshot of parent filesystem - ignore exclude property for top fs
-            take_filesystem(children[0], conf)
+            take_filesystem(children[0], conf, output_handler)
             # Take snapshot of all children that don't have all snapshots yet
             for child in children[1:]:
                 if snap_exclude_property and child.ispropval(snap_exclude_property, check='false'):
                     logger.debug('Ignore dataset {:s}, have property {:s}=false'.format(child.name, snap_exclude_property))
                 else:
-                    take_filesystem(child, conf)
+                    take_filesystem(child, conf, output_handler)
         finally:
             if ssh:
                 ssh.close()

@@ -23,6 +23,7 @@ from .send import send_config
 from .status import status_config
 from .fix import fix_snapshots
 from .process import set_dry_run
+from .output import OutputHandler
 import pyznap.pyzfs as zfs
 from . import __version__
 from .verification import verify_remote_snapshots, Status
@@ -85,6 +86,9 @@ def _main():
                         dest="matching", help='only process matching filesystems')
     parser.add_argument('--pidfile', action="store",
                         dest="pidfile", default=None, help='path to pid file')
+    parser.add_argument('--output-format', action="store", default='log',
+                        choices=['log', 'json', 'jsonl'],
+                        dest="output_format", help='output format for results (json, jsonl, or log)')
     parser.add_argument('-V', '--version', action="store_true",
                         dest="version", help='print version number')
 
@@ -200,6 +204,9 @@ def _main():
     if args.command == 'status' and args.status_format != 'log':
         # for raw status only error show
         loglevel = logging.ERROR
+    if args.output_format != 'log':
+        # for json/jsonl output, only show errors to avoid mixing with JSON
+        loglevel = logging.ERROR
     if args.trace:
         # trace override all
         logging.addLevelName(8, 'TRACE')
@@ -262,22 +269,44 @@ def _main():
             create_config(path)
 
         elif args.command == 'full':
-            take_config(config, settings)
+            output_handler = OutputHandler(args.output_format, 'full') if args.output_format != 'log' else None
+            take_config(config, settings, output_handler)
             send_config(config, settings)
-            clean_config(config, settings)
+            clean_config(config, settings, output_handler)
+            if output_handler:
+                output_handler.set_stats(zfs.STATS.to_dict())
+                output_handler.finalize()
 
         elif args.command == 'snap':
             # Default if no args are given
             if not args.take and not args.clean:
                 args.full = True
 
+            # Determine command name for output handler
+            if args.take and args.clean:
+                cmd_name = 'snap-full'
+            elif args.take:
+                cmd_name = 'snap-take'
+            elif args.clean:
+                cmd_name = 'snap-clean'
+            else:
+                cmd_name = 'snap-full'
+
+            output_handler = OutputHandler(args.output_format, cmd_name) if args.output_format != 'log' else None
+
             if args.take or args.full:
-                take_config(config, settings)
+                take_config(config, settings, output_handler)
 
             if args.clean or args.full:
-                clean_config(config, settings)
+                clean_config(config, settings, output_handler)
+
+            if output_handler:
+                output_handler.set_stats(zfs.STATS.to_dict())
+                output_handler.finalize()
 
         elif args.command == 'send':
+            output_handler = OutputHandler(args.output_format, 'send') if args.output_format != 'log' else None
+
             if args.source and args.dest:
                 # use args.key if either source or dest is remote
                 source_key, dest_key = None, None
@@ -317,6 +346,10 @@ def _main():
                 logger.error('Missing source...')
             else:
                 send_config(config, settings)
+
+            if output_handler:
+                output_handler.set_stats(zfs.STATS.to_dict())
+                output_handler.finalize()
 
         elif args.command == 'fix':
             tmap = args.map
