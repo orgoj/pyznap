@@ -19,6 +19,9 @@ from .ssh import SSHException
 from datetime import datetime
 from configparser import (ConfigParser, NoOptionError, MissingSectionHeaderError,
                           DuplicateSectionError, DuplicateOptionError)
+# TODO: Migrate from pkg_resources to importlib.resources when dropping Python 3.6-3.8 support
+import warnings
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated", category=UserWarning)
 from pkg_resources import resource_string
 
 
