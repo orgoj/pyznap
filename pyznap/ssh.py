@@ -1,23 +1,24 @@
 """
-    pyznap.ssh
-    ~~~~~~~~~~~~~~
+pyznap.ssh
+~~~~~~~~~~~~~~
 
-    ssh connection.
+ssh connection.
 
-    :copyright: (c) 2018-2019 by Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2018-2019 by Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
-import os
 import logging
+import os
 import subprocess as sp
-import pyznap.utils
 from datetime import datetime
+
 from .process import run
 
 
 class SSHException(Exception):
     """General ssh exception to be raised if anything fails"""
+
     pass
 
 
@@ -70,19 +71,33 @@ class SSH:
         self.user = user
         self.host = host
         self.port = port
-        self.socket = '/tmp/pyznap_{:s}@{:s}:{:d}_{:s}'.format(self.user, self.host, self.port,
-                      datetime.now().strftime('%Y-%m-%d_%H:%M:%S'))
+        self.socket = '/tmp/pyznap_{:s}@{:s}:{:d}_{:s}'.format(
+            self.user, self.host, self.port, datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+        )
         self.key = key or os.path.expanduser('~/.ssh/id_rsa')
 
         if not os.path.isfile(self.key):
-            self.logger.error('{} is not a valid ssh key file...'.format(self.key))
+            self.logger.error(f'{self.key} is not a valid ssh key file...')
             raise FileNotFoundError(self.key)
 
-        self.cmd = ['ssh', '-i', self.key, '-o', 'ControlMaster=auto', '-o', 'ControlPersist=1m',
-                    '-o', 'ControlPath={:s}'.format(self.socket), '-p', str(self.port),
-                    '-o', 'ServerAliveInterval=30', '{:s}@{:s}'.format(self.user, self.host)]
+        self.cmd = [
+            'ssh',
+            '-i',
+            self.key,
+            '-o',
+            'ControlMaster=auto',
+            '-o',
+            'ControlPersist=1m',
+            '-o',
+            f'ControlPath={self.socket:s}',
+            '-p',
+            str(self.port),
+            '-o',
+            'ServerAliveInterval=30',
+            f'{self.user:s}@{self.host:s}',
+        ]
 
-        self.logger.log(8, 'SSH: init socket={}'.format(self.socket))
+        self.logger.log(8, f'SSH: init socket={self.socket}')
 
         # setup ControlMaster. Process will hang if we call Popen with stderr=sp.PIPE, see
         # https://lists.mindrot.org/pipermail/openssh-unix-dev/2014-January/031976.html
@@ -97,10 +112,9 @@ class SSH:
         except (sp.CalledProcessError, sp.TimeoutExpired) as err:
             message = err.stderr.rstrip().decode() if hasattr(err, 'stderr') else err
 
-            self.logger.error('Error while connecting to {:s}@{:s}: {}...'
-                              .format(self.user, self.host, message))
+            self.logger.error(f'Error while connecting to {self.user:s}@{self.host:s}: {message}...')
             self.close()
-            raise SSHException(message)
+            raise SSHException(message) from err
 
         # set up compression
         self.compress, self.decompress = self.setup_compression(compress)
@@ -109,14 +123,11 @@ class SSH:
         # set up pv
         self.pv = self.setup_pv()
 
-
-
     def __str__(self):
-        return '{:s}@{:s}:{:d}'.format(self.user, self.host, self.port)
+        return f'{self.user:s}@{self.host:s}:{self.port:d}'
 
     def __repr__(self):
-        return '{:s}@{:s}:{:d} (compress={:s}:{:s})'.format(self.user, self.host, self.port, str(self.compress), str(self.decompress))
-
+        return f'{self.user:s}@{self.host:s}:{self.port:d} (compress={str(self.compress):s}:{str(self.decompress):s})'
 
     def setup_compression(self, _type):
         """Checks if compression algo is available on source and dest.
@@ -132,36 +143,38 @@ class SSH:
             Tuple of compress/decompress commands to use, (None, None) if compression is not available
         """
 
-        if _type == None or _type.lower() == 'none':
+        if _type is None or _type.lower() == 'none':
             return None, None
 
         # compress/decompress commands of different compression tools
-        algos = {'gzip': (['gzip', '-3'], ['gzip', '-dc']),
-                 'lzop': (['lzop'], ['lzop', '-dfc']),
-                 'bzip2': (['bzip2'], ['bzip2', '-dfc']),
-                 'pigz': (['pigz'], ['pigz', '-dc']),
-                 'xz': (['xz'], ['xz', '-d']),
-                 'lz4': (['lz4'], ['lz4', '-dc'])}
+        algos = {
+            'gzip': (['gzip', '-3'], ['gzip', '-dc']),
+            'lzop': (['lzop'], ['lzop', '-dfc']),
+            'bzip2': (['bzip2'], ['bzip2', '-dfc']),
+            'pigz': (['pigz'], ['pigz', '-dc']),
+            'xz': (['xz'], ['xz', '-d']),
+            'lz4': (['lz4'], ['lz4', '-dc']),
+        }
 
         if _type not in algos:
-            self.logger.warning('Compression method {:s} not supported. Will continue without...'.format(_type))
+            self.logger.warning(f'Compression method {_type:s} not supported. Will continue without...')
             return None, None
 
         from pyznap.utils import exists
+
         # check if compression is available on source and dest
         if not exists(_type):
-            self.logger.warning('{:s} does not exist, continuing without compression...'
-                                .format(_type))
+            self.logger.warning(f'{_type:s} does not exist, continuing without compression...')
             return None, None
         if not exists(_type, ssh=self):
-            self.logger.warning('{:s} does not exist on {:s}@{:s}, continuing without compression...'
-                                .format(_type, self.user, self.host))
+            self.logger.warning(
+                f'{_type:s} does not exist on {self.user:s}@{self.host:s}, continuing without compression...'
+            )
             return None, None
 
-        self.logger.log(8, 'SSH: use compression {:s}'.format(_type))
+        self.logger.log(8, f'SSH: use compression {_type:s}')
 
         return algos[_type]
-
 
     def setup_mbuffer(self):
         """Checks if mbuffer is available on host
@@ -175,7 +188,7 @@ class SSH:
         from pyznap.utils import exists
 
         if 'PYZNAP_DISABLE_MBUFFER' not in os.environ and exists('mbuffer', ssh=self):
-            return lambda mem: ['mbuffer', '-q', '-s', '128K', '-m', '{:d}M'.format(mem)]
+            return lambda mem: ['mbuffer', '-q', '-s', '128K', '-m', f'{mem:d}M']
         else:
             return None
 
@@ -195,19 +208,17 @@ class SSH:
         else:
             return None
 
-
     def close(self):
         """Closes the ssh connection by invoking '-O exit' (deletes socket file)"""
 
         if self._closed:
             return
-        self.logger.log(8, 'SSH: close socket={}'.format(self.socket))
+        self.logger.log(8, f'SSH: close socket={self.socket}')
         try:
             run(['-O', 'exit'], timeout=5, stderr=sp.PIPE, ssh=self)
             self._closed = True
         except (sp.CalledProcessError, sp.TimeoutExpired):
             pass
-
 
     def __del__(self):
         self.close()

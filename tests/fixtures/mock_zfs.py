@@ -5,9 +5,8 @@ Provides mock implementations of ZFS filesystems and snapshots
 without requiring actual ZFS pools.
 """
 
-from unittest.mock import Mock, MagicMock
-from datetime import datetime, timedelta
 from collections import OrderedDict
+from datetime import datetime, timedelta
 
 
 class MockZFSSnapshot:
@@ -17,8 +16,7 @@ class MockZFSSnapshot:
     Simulates a ZFS snapshot with properties and metadata.
     """
 
-    def __init__(self, filesystem_name, snapshot_name, creation_time=None,
-                 used=1000000, referenced=5000000):
+    def __init__(self, filesystem_name, snapshot_name, creation_time=None, used=1000000, referenced=5000000):
         """
         Initialize a mock ZFS snapshot.
 
@@ -29,7 +27,7 @@ class MockZFSSnapshot:
             used: Used space in bytes
             referenced: Referenced space in bytes
         """
-        self.name = f"{filesystem_name}@{snapshot_name}"
+        self.name = f'{filesystem_name}@{snapshot_name}'
         self.filesystem_name = filesystem_name
         self.snapshot_name = snapshot_name
 
@@ -162,14 +160,10 @@ def create_mock_snapshot(name, hours_ago=0, snap_type='daily', used=1000000, ref
     """
     creation_time = datetime.now() - timedelta(hours=hours_ago)
     timestamp_str = creation_time.strftime('%Y-%m-%d_%H%M%S')
-    snapshot_name = f"pyznap_{timestamp_str}_{snap_type}"
+    snapshot_name = f'pyznap_{timestamp_str}_{snap_type}'
 
     return MockZFSSnapshot(
-        filesystem_name=name,
-        snapshot_name=snapshot_name,
-        creation_time=creation_time,
-        used=used,
-        referenced=referenced
+        filesystem_name=name, snapshot_name=snapshot_name, creation_time=creation_time, used=used, referenced=referenced
     )
 
 
@@ -191,9 +185,6 @@ def create_mock_filesystem_with_snapshots(name, snapshot_config):
         ...     (169, 'weekly')
         ... ])
     """
-    snapshots = [
-        create_mock_snapshot(name, hours_ago=hours, snap_type=stype)
-        for hours, stype in snapshot_config
-    ]
+    snapshots = [create_mock_snapshot(name, hours_ago=hours, snap_type=stype) for hours, stype in snapshot_config]
 
     return MockZFSFilesystem(name=name, snapshots=snapshots)

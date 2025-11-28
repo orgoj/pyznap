@@ -14,20 +14,19 @@ Key features:
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Dict, Union
-from collections import OrderedDict
-
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class Status(Enum):
     """Verification status levels."""
-    OK = "OK"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    CRITICAL = "CRITICAL"
-    UNKNOWN = "UNKNOWN"
+
+    OK = 'OK'
+    WARNING = 'WARNING'
+    ERROR = 'ERROR'
+    CRITICAL = 'CRITICAL'
+    UNKNOWN = 'UNKNOWN'
 
     def __lt__(self, other):
         """Allow comparison of status levels."""
@@ -47,8 +46,7 @@ class SnapshotInfo:
         snap_type: Type of snapshot (hourly, daily, weekly, monthly, yearly)
     """
 
-    def __init__(self, name: str, creation_time: datetime, used: int,
-                 referenced: int, snap_type: str):
+    def __init__(self, name: str, creation_time: datetime, used: int, referenced: int, snap_type: str):
         self.name = name
         self.creation_time = creation_time
         self.used = used
@@ -112,7 +110,7 @@ class VerificationReport:
             'errors': self.errors,
             'warnings': self.warnings,
             'recommendations': self.recommendations,
-            'info': self.info
+            'info': self.info,
         }
 
     def format_human_readable(self) -> str:
@@ -123,35 +121,35 @@ class VerificationReport:
             Formatted string
         """
         lines = []
-        lines.append(f"Status: {self.status.value}")
-        lines.append(f"Lag: {format_duration(self.lag_seconds)}")
+        lines.append(f'Status: {self.status.value}')
+        lines.append(f'Lag: {format_duration(self.lag_seconds)}')
 
         if self.errors:
-            lines.append("\nErrors:")
+            lines.append('\nErrors:')
             for err in self.errors:
-                lines.append(f"  ❌ {err}")
+                lines.append(f'  ❌ {err}')
 
         if self.warnings:
-            lines.append("\nWarnings:")
+            lines.append('\nWarnings:')
             for warn in self.warnings:
-                lines.append(f"  ⚠️  {warn}")
+                lines.append(f'  ⚠️  {warn}')
 
         if self.missing_snapshots:
-            lines.append(f"\nMissing snapshots: {len(self.missing_snapshots)}")
+            lines.append(f'\nMissing snapshots: {len(self.missing_snapshots)}')
             for snap in self.missing_snapshots[:5]:  # Show first 5
-                lines.append(f"  - {snap.name}")
+                lines.append(f'  - {snap.name}')
             if len(self.missing_snapshots) > 5:
-                lines.append(f"  ... and {len(self.missing_snapshots) - 5} more")
+                lines.append(f'  ... and {len(self.missing_snapshots) - 5} more')
 
         if self.recommendations:
-            lines.append("\nRecommendations:")
+            lines.append('\nRecommendations:')
             for rec in self.recommendations:
-                lines.append(f"  💡 {rec}")
+                lines.append(f'  💡 {rec}')
 
         if self.info:
-            lines.append("\nInfo:")
+            lines.append('\nInfo:')
             for inf in self.info:
-                lines.append(f"  ℹ️  {inf}")
+                lines.append(f'  ℹ️  {inf}')
 
         return '\n'.join(lines)
 
@@ -167,13 +165,13 @@ def format_duration(seconds: float) -> str:
         Human-readable string (e.g., "1.2d", "3.5h", "45m")
     """
     if seconds < 60:
-        return f"{seconds:.0f}s"
+        return f'{seconds:.0f}s'
     elif seconds < 3600:
-        return f"{seconds/60:.0f}m"
+        return f'{seconds / 60:.0f}m'
     elif seconds < 86400:
-        return f"{seconds/3600:.1f}h"
+        return f'{seconds / 3600:.1f}h'
     else:
-        return f"{seconds/86400:.1f}d"
+        return f'{seconds / 86400:.1f}d'
 
 
 def get_snapshots_with_metadata(filesystem) -> List[SnapshotInfo]:
@@ -191,7 +189,7 @@ def get_snapshots_with_metadata(filesystem) -> List[SnapshotInfo]:
     try:
         fs_snapshots = filesystem.snapshots()
     except Exception as err:
-        logger.error(f"Failed to get snapshots for {filesystem}: {err}")
+        logger.error(f'Failed to get snapshots for {filesystem}: {err}')
         return []
 
     for snap in fs_snapshots:
@@ -205,16 +203,12 @@ def get_snapshots_with_metadata(filesystem) -> List[SnapshotInfo]:
             snap_type = extract_snapshot_type(snap.name)
 
             snapshot_info = SnapshotInfo(
-                name=snap.name,
-                creation_time=creation_time,
-                used=used,
-                referenced=referenced,
-                snap_type=snap_type
+                name=snap.name, creation_time=creation_time, used=used, referenced=referenced, snap_type=snap_type
             )
             snapshots.append(snapshot_info)
 
         except (KeyError, ValueError, IndexError) as err:
-            logger.debug(f"Skipping snapshot {snap.name}: {err}")
+            logger.debug(f'Skipping snapshot {snap.name}: {err}')
             continue
 
     # Sort by creation time, newest first
@@ -267,8 +261,9 @@ def extract_snapshot_name(full_name: str) -> str:
     return full_name.split('@')[-1] if '@' in full_name else full_name
 
 
-def find_latest_common_snapshot(source_snaps: List[SnapshotInfo],
-                                 dest_snaps: List[SnapshotInfo]) -> Optional[SnapshotInfo]:
+def find_latest_common_snapshot(
+    source_snaps: List[SnapshotInfo], dest_snaps: List[SnapshotInfo]
+) -> Optional[SnapshotInfo]:
     """
     Find the latest snapshot that exists on both source and destination.
 
@@ -299,9 +294,9 @@ def find_latest_common_snapshot(source_snaps: List[SnapshotInfo],
     return max(common_snaps, key=lambda s: s.creation_time)
 
 
-def check_missing_incrementals(source_snaps: List[SnapshotInfo],
-                                dest_snaps: List[SnapshotInfo],
-                                latest_common: SnapshotInfo) -> List[SnapshotInfo]:
+def check_missing_incrementals(
+    source_snaps: List[SnapshotInfo], dest_snaps: List[SnapshotInfo], latest_common: SnapshotInfo
+) -> List[SnapshotInfo]:
     """
     Check for missing snapshots between latest_common and source_latest.
 
@@ -374,29 +369,32 @@ def verify_remote_snapshots(source_fs, dest_fs, config: Dict) -> VerificationRep
     report = VerificationReport()
 
     # Get thresholds from config
-    thresholds = config.get('verify_thresholds', {
-        'ok': 86400,        # 1 day
-        'warning': 172800,  # 2 days
-        'critical': 604800  # 7 days
-    })
+    thresholds = config.get(
+        'verify_thresholds',
+        {
+            'ok': 86400,  # 1 day
+            'warning': 172800,  # 2 days
+            'critical': 604800,  # 7 days
+        },
+    )
 
     # 1. Get snapshots with metadata
-    logger.debug(f"Getting snapshots for source {source_fs}")
+    logger.debug(f'Getting snapshots for source {source_fs}')
     source_snaps = get_snapshots_with_metadata(source_fs)
 
-    logger.debug(f"Getting snapshots for destination {dest_fs}")
+    logger.debug(f'Getting snapshots for destination {dest_fs}')
     dest_snaps = get_snapshots_with_metadata(dest_fs)
 
     # 2. Check if destination has any snapshots
     if not dest_snaps:
         report.status = Status.WARNING
-        report.add_warning("Destination has no snapshots (new remote?)")
-        report.add_recommendation("Initialize with: pyznap send")
+        report.add_warning('Destination has no snapshots (new remote?)')
+        report.add_recommendation('Initialize with: pyznap send')
         return report
 
     if not source_snaps:
         report.status = Status.ERROR
-        report.add_error("Source has no snapshots")
+        report.add_error('Source has no snapshots')
         return report
 
     # 3. Find latest common snapshot
@@ -404,8 +402,8 @@ def verify_remote_snapshots(source_fs, dest_fs, config: Dict) -> VerificationRep
 
     if not latest_common:
         report.status = Status.CRITICAL
-        report.add_error("No common snapshots found between source and destination")
-        report.add_recommendation("May need to re-initialize backup with full send")
+        report.add_error('No common snapshots found between source and destination')
+        report.add_recommendation('May need to re-initialize backup with full send')
         return report
 
     # 4. Calculate time lag
@@ -413,31 +411,31 @@ def verify_remote_snapshots(source_fs, dest_fs, config: Dict) -> VerificationRep
     lag = source_latest.creation_time - latest_common.creation_time
     report.lag_seconds = lag.total_seconds()
 
-    logger.debug(f"Latest common snapshot: {latest_common.name}")
-    logger.debug(f"Lag: {format_duration(report.lag_seconds)}")
+    logger.debug(f'Latest common snapshot: {latest_common.name}')
+    logger.debug(f'Lag: {format_duration(report.lag_seconds)}')
 
     # 5. Evaluate status based on lag
     if report.lag_seconds < thresholds['ok']:
         report.status = Status.OK
     elif report.lag_seconds < thresholds['warning']:
         report.status = Status.WARNING
-        report.add_warning(f"Destination is {format_duration(report.lag_seconds)} behind")
-        report.add_recommendation("Consider increasing backup frequency")
+        report.add_warning(f'Destination is {format_duration(report.lag_seconds)} behind')
+        report.add_recommendation('Consider increasing backup frequency')
     elif report.lag_seconds < thresholds['critical']:
         report.status = Status.ERROR
-        report.add_error(f"Destination is {format_duration(report.lag_seconds)} behind")
-        report.add_recommendation("Immediate backup required: pyznap send")
+        report.add_error(f'Destination is {format_duration(report.lag_seconds)} behind')
+        report.add_recommendation('Immediate backup required: pyznap send')
     else:
         report.status = Status.CRITICAL
-        report.add_error(f"Destination is severely out of date ({format_duration(report.lag_seconds)} behind)")
-        report.add_recommendation("URGENT: Run pyznap send immediately")
+        report.add_error(f'Destination is severely out of date ({format_duration(report.lag_seconds)} behind)')
+        report.add_recommendation('URGENT: Run pyznap send immediately')
 
     # 6. Check for missing incremental snapshots
     missing_incrementals = check_missing_incrementals(source_snaps, dest_snaps, latest_common)
 
     if missing_incrementals:
         report.missing_snapshots = missing_incrementals
-        report.add_warning(f"{len(missing_incrementals)} incremental snapshots missing on destination")
+        report.add_warning(f'{len(missing_incrementals)} incremental snapshots missing on destination')
 
         # Upgrade status if we have warnings but status is OK
         if report.status == Status.OK:
@@ -452,7 +450,9 @@ def verify_remote_snapshots(source_fs, dest_fs, config: Dict) -> VerificationRep
             coverage = dest_count / source_count if source_count > 0 else 0
 
             if coverage < 0.8:  # Less than 80% coverage
-                report.add_warning(f"Low {snap_type} snapshot coverage: {coverage*100:.0f}% ({dest_count}/{source_count})")
+                report.add_warning(
+                    f'Low {snap_type} snapshot coverage: {coverage * 100:.0f}% ({dest_count}/{source_count})'
+                )
 
                 # Upgrade to WARNING if currently OK
                 if report.status == Status.OK:
@@ -463,7 +463,7 @@ def verify_remote_snapshots(source_fs, dest_fs, config: Dict) -> VerificationRep
     oldest_source = min(source_snaps, key=lambda s: s.creation_time)
 
     if oldest_dest.creation_time > oldest_source.creation_time:
-        report.add_info(f"Remote initialized at {oldest_dest.creation_time.isoformat()}")
-        report.add_info("Partial history is expected for new backup destinations")
+        report.add_info(f'Remote initialized at {oldest_dest.creation_time.isoformat()}')
+        report.add_info('Partial history is expected for new backup destinations')
 
     return report

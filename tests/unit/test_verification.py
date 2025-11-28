@@ -9,31 +9,27 @@ Tests all verification functionality including:
 - Special cases (new remote, empty remote, no common snapshots)
 """
 
-import pytest
-from datetime import datetime, timedelta
-from unittest.mock import Mock
-
 import sys
+from datetime import datetime, timedelta
+
+import pytest
+
 sys.path.insert(0, '/home/user/pyznap')
 
 from pyznap.verification import (
-    Status,
     SnapshotInfo,
+    Status,
     VerificationReport,
-    extract_snapshot_type,
-    extract_snapshot_name,
-    get_snapshots_with_metadata,
-    find_latest_common_snapshot,
     check_missing_incrementals,
     count_snapshots_of_type,
+    extract_snapshot_name,
+    extract_snapshot_type,
+    find_latest_common_snapshot,
+    format_duration,
+    get_snapshots_with_metadata,
     verify_remote_snapshots,
-    format_duration
 )
-from tests.fixtures.mock_zfs import (
-    MockZFSFilesystem,
-    create_mock_snapshot,
-    create_mock_filesystem_with_snapshots
-)
+from tests.fixtures.mock_zfs import MockZFSFilesystem, create_mock_filesystem_with_snapshots, create_mock_snapshot
 
 
 class TestStatus:
@@ -57,7 +53,7 @@ class TestSnapshotInfo:
             creation_time=now,
             used=1000000,
             referenced=5000000,
-            snap_type='daily'
+            snap_type='daily',
         )
 
         assert snap.name == 'tank/data@pyznap_2025-01-15_120000_daily'
@@ -95,10 +91,10 @@ class TestVerificationReport:
         """Test adding messages to report."""
         report = VerificationReport()
 
-        report.add_error("Test error")
-        report.add_warning("Test warning")
-        report.add_recommendation("Test recommendation")
-        report.add_info("Test info")
+        report.add_error('Test error')
+        report.add_warning('Test warning')
+        report.add_recommendation('Test recommendation')
+        report.add_info('Test info')
 
         assert len(report.errors) == 1
         assert len(report.warnings) == 1
@@ -110,7 +106,7 @@ class TestVerificationReport:
         report = VerificationReport()
         report.status = Status.WARNING
         report.lag_seconds = 3600.0
-        report.add_warning("Test warning")
+        report.add_warning('Test warning')
 
         result = report.to_dict()
 
@@ -331,24 +327,16 @@ class TestVerifyRemoteSnapshots:
     def test_up_to_date_remote(self):
         """Test when remote is up-to-date."""
         # Create source with recent snapshots
-        source_fs = create_mock_filesystem_with_snapshots('tank/data', [
-            (1, 'hourly'),
-            (25, 'daily'),
-            (49, 'daily')
-        ])
+        source_fs = create_mock_filesystem_with_snapshots('tank/data', [(1, 'hourly'), (25, 'daily'), (49, 'daily')])
 
         # Create dest with same snapshots
-        dest_fs = create_mock_filesystem_with_snapshots('backup/data', [
-            (1, 'hourly'),
-            (25, 'daily'),
-            (49, 'daily')
-        ])
+        dest_fs = create_mock_filesystem_with_snapshots('backup/data', [(1, 'hourly'), (25, 'daily'), (49, 'daily')])
 
         config = {
             'verify_thresholds': {
-                'ok': 86400,        # 1 day
+                'ok': 86400,  # 1 day
                 'warning': 172800,  # 2 days
-                'critical': 604800  # 7 days
+                'critical': 604800,  # 7 days
             }
         }
 
@@ -360,21 +348,27 @@ class TestVerifyRemoteSnapshots:
     def test_lagging_remote_warning(self):
         """Test when remote is lagging (WARNING level)."""
         # Source has recent snapshot
-        source_fs = create_mock_filesystem_with_snapshots('tank/data', [
-            (1, 'hourly'),
-            (23, 'daily'),  # 23 hours ago to stay below WARNING threshold
-        ])
+        source_fs = create_mock_filesystem_with_snapshots(
+            'tank/data',
+            [
+                (1, 'hourly'),
+                (23, 'daily'),  # 23 hours ago to stay below WARNING threshold
+            ],
+        )
 
         # Dest missing the recent snapshot
-        dest_fs = create_mock_filesystem_with_snapshots('backup/data', [
-            (23, 'daily'),  # 22 hour lag (23-1) is within WARNING range
-        ])
+        dest_fs = create_mock_filesystem_with_snapshots(
+            'backup/data',
+            [
+                (23, 'daily'),  # 22 hour lag (23-1) is within WARNING range
+            ],
+        )
 
         config = {
             'verify_thresholds': {
-                'ok': 3600,         # 1 hour
-                'warning': 86400,   # 1 day
-                'critical': 604800  # 7 days
+                'ok': 3600,  # 1 hour
+                'warning': 86400,  # 1 day
+                'critical': 604800,  # 7 days
             }
         }
 
@@ -386,21 +380,27 @@ class TestVerifyRemoteSnapshots:
     def test_lagging_remote_critical(self):
         """Test when remote is severely lagging (CRITICAL)."""
         # Source has recent snapshot
-        source_fs = create_mock_filesystem_with_snapshots('tank/data', [
-            (1, 'hourly'),
-            (169, 'weekly'),  # 1 week old
-        ])
+        source_fs = create_mock_filesystem_with_snapshots(
+            'tank/data',
+            [
+                (1, 'hourly'),
+                (169, 'weekly'),  # 1 week old
+            ],
+        )
 
         # Dest only has very old snapshot
-        dest_fs = create_mock_filesystem_with_snapshots('backup/data', [
-            (169, 'weekly'),
-        ])
+        dest_fs = create_mock_filesystem_with_snapshots(
+            'backup/data',
+            [
+                (169, 'weekly'),
+            ],
+        )
 
         config = {
             'verify_thresholds': {
-                'ok': 86400,        # 1 day
+                'ok': 86400,  # 1 day
                 'warning': 172800,  # 2 days
-                'critical': 604800  # 7 days
+                'critical': 604800,  # 7 days
             }
         }
 
@@ -411,9 +411,12 @@ class TestVerifyRemoteSnapshots:
 
     def test_empty_remote(self):
         """Test when remote has no snapshots."""
-        source_fs = create_mock_filesystem_with_snapshots('tank/data', [
-            (1, 'hourly'),
-        ])
+        source_fs = create_mock_filesystem_with_snapshots(
+            'tank/data',
+            [
+                (1, 'hourly'),
+            ],
+        )
 
         dest_fs = MockZFSFilesystem('backup/data', snapshots=[])
 
@@ -422,20 +425,23 @@ class TestVerifyRemoteSnapshots:
         report = verify_remote_snapshots(source_fs, dest_fs, config)
 
         assert report.status == Status.WARNING
-        assert "no snapshots" in report.warnings[0].lower()
+        assert 'no snapshots' in report.warnings[0].lower()
 
     def test_no_common_snapshots(self):
         """Test when there are no common snapshots."""
-        source_fs = create_mock_filesystem_with_snapshots('tank/data', [
-            (1, 'hourly'),
-        ])
+        source_fs = create_mock_filesystem_with_snapshots(
+            'tank/data',
+            [
+                (1, 'hourly'),
+            ],
+        )
 
         # Different snapshot names
-        now = datetime.now()
+        datetime.now()
         snap = create_mock_snapshot('backup/data', hours_ago=1, snap_type='hourly')
         # Change the name to make it different
         snap._snapshot_name = 'different_snapshot'
-        snap.name = f"backup/data@different_snapshot"
+        snap.name = 'backup/data@different_snapshot'
 
         dest_fs = MockZFSFilesystem('backup/data', snapshots=[snap])
 
@@ -444,17 +450,20 @@ class TestVerifyRemoteSnapshots:
         report = verify_remote_snapshots(source_fs, dest_fs, config)
 
         assert report.status == Status.CRITICAL
-        assert "no common" in report.errors[0].lower()
+        assert 'no common' in report.errors[0].lower()
 
     def test_missing_incrementals_warning(self):
         """Test warning for missing incremental snapshots."""
         # Source has 4 snapshots
-        source_fs = create_mock_filesystem_with_snapshots('tank/data', [
-            (1, 'hourly'),
-            (25, 'daily'),
-            (49, 'daily'),
-            (73, 'daily'),
-        ])
+        source_fs = create_mock_filesystem_with_snapshots(
+            'tank/data',
+            [
+                (1, 'hourly'),
+                (25, 'daily'),
+                (49, 'daily'),
+                (73, 'daily'),
+            ],
+        )
 
         # Dest has oldest and one middle snapshot, missing 1h and 25h
         source_snaps = source_fs.snapshots()
@@ -464,28 +473,18 @@ class TestVerifyRemoteSnapshots:
         # Create new mock snapshots for dest with different filesystem name
         dest_snap_list = []
         for s in dest_snaps:
-            props = s.getprops()
-            new_snap = create_mock_snapshot(
-                'backup/data',
-                hours_ago=0,
-                snap_type=s.snapshot_name.split('_')[-1]
-            )
+            s.getprops()
+            new_snap = create_mock_snapshot('backup/data', hours_ago=0, snap_type=s.snapshot_name.split('_')[-1])
             # Keep the same snapshot name
             new_snap.snapshot_name = s.snapshot_name
-            new_snap.name = f"backup/data@{s.snapshot_name}"
+            new_snap.name = f'backup/data@{s.snapshot_name}'
             new_snap._creation_time = s._creation_time
             new_snap._timestamp = s._timestamp
             dest_snap_list.append(new_snap)
 
         dest_fs = MockZFSFilesystem('backup/data', snapshots=dest_snap_list)
 
-        config = {
-            'verify_thresholds': {
-                'ok': 86400,
-                'warning': 172800,
-                'critical': 604800
-            }
-        }
+        config = {'verify_thresholds': {'ok': 86400, 'warning': 172800, 'critical': 604800}}
 
         report = verify_remote_snapshots(source_fs, dest_fs, config)
 

@@ -1,23 +1,29 @@
 """
-    pyznap.tests.test_utils
-    ~~~~~~~~~~~~~~
+pyznap.tests.test_utils
+~~~~~~~~~~~~~~
 
-    Helper functions for tests.
+Helper functions for tests.
 
-    :copyright: (c) 2018-2019 by Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2018-2019 by Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
-
-import os
 import logging
+import os
+from socket import gaierror, timeout
 
 import paramiko as pm
-from socket import timeout, gaierror
-from paramiko.ssh_exception import (AuthenticationException, BadAuthenticationType,
-                                    BadHostKeyException, ChannelException, NoValidConnectionsError,
-                                    PasswordRequiredException, SSHException, PartialAuthentication,
-                                    ProxyCommandFailure)
+from paramiko.ssh_exception import (
+    AuthenticationException,
+    BadAuthenticationType,
+    BadHostKeyException,
+    ChannelException,
+    NoValidConnectionsError,
+    PartialAuthentication,
+    PasswordRequiredException,
+    ProxyCommandFailure,
+    SSHException,
+)
 
 
 def open_ssh(user, host, key=None, port=22):
@@ -53,7 +59,7 @@ def open_ssh(user, host, key=None, port=22):
     if not key:
         key = os.path.expanduser('~/.ssh/id_rsa')
     if not os.path.isfile(key):
-        logger.error('{} is not a valid ssh key file...'.format(key))
+        logger.error(f'{key} is not a valid ssh key file...')
         raise FileNotFoundError(key)
 
     ssh = pm.SSHClient()
@@ -61,20 +67,28 @@ def open_ssh(user, host, key=None, port=22):
     ssh.user, ssh.host = user, host
     try:
         ssh.load_system_host_keys(os.path.expanduser('~/.ssh/known_hosts'))
-    except (IOError, FileNotFoundError):
+    except (OSError, FileNotFoundError):
         ssh.load_system_host_keys()
     ssh.set_missing_host_key_policy(pm.WarningPolicy())
 
     try:
-        ssh.connect(hostname=host, port=port, username=user, key_filename=key, timeout=5,
-                    look_for_keys=False)
+        ssh.connect(hostname=host, port=port, username=user, key_filename=key, timeout=5, look_for_keys=False)
         # Test connection
         ssh.exec_command('ls', timeout=5)
-    except (AuthenticationException, BadAuthenticationType,
-            BadHostKeyException, ChannelException, NoValidConnectionsError,
-            PasswordRequiredException, SSHException, PartialAuthentication,
-            ProxyCommandFailure, timeout, gaierror) as err:
-        logger.error('Could not connect to host {:s}: {}...'.format(host, err))
+    except (
+        AuthenticationException,
+        BadAuthenticationType,
+        BadHostKeyException,
+        ChannelException,
+        NoValidConnectionsError,
+        PasswordRequiredException,
+        SSHException,
+        PartialAuthentication,
+        ProxyCommandFailure,
+        timeout,
+        gaierror,
+    ) as err:
+        logger.error(f'Could not connect to host {host:s}: {err}...')
         # Raise general exception to be catched outside
         raise SSHException(err)
 

@@ -1,18 +1,17 @@
 """
-    pyznap.process
-    ~~~~~~~~~~~~~~
+pyznap.process
+~~~~~~~~~~~~~~
 
-    Catch ZFS subprocess errors, forked from https://bitbucket.org/stevedrake/weir/.
+Catch ZFS subprocess errors, forked from https://bitbucket.org/stevedrake/weir/.
 
-    :copyright: (c) 2015-2019 by Stephen Drake, Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2015-2019 by Stephen Drake, Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
+import errno as _errno
 import logging
 import re
-import errno as _errno
 import subprocess as sp
-import socket
 
 DRY_RUN = False
 
@@ -21,27 +20,33 @@ PIPE = sp.PIPE
 
 class ZFSError(OSError):
     def __init__(self, dataset):
-        super(ZFSError, self).__init__(self.errno, self.strerror, dataset)
+        super().__init__(self.errno, self.strerror, dataset)
+
 
 class DatasetNotFoundError(ZFSError):
     errno = _errno.ENOENT
     strerror = 'dataset does not exist'
 
+
 class DatasetExistsError(ZFSError):
     errno = _errno.EEXIST
     strerror = 'dataset already exists'
+
 
 class DatasetBusyError(ZFSError):
     errno = _errno.EBUSY
     strerror = 'dataset is busy'
 
+
 class HoldTagNotFoundError(ZFSError):
     errno = _errno.ENOENT
     strerror = 'no such tag on this dataset'
 
+
 class HoldTagExistsError(ZFSError):
     errno = _errno.EEXIST
     strerror = 'tag already exists on this dataset'
+
 
 class CompletedProcess(sp.CompletedProcess):
     def check_returncode(self):
@@ -54,32 +59,35 @@ class CompletedProcess(sp.CompletedProcess):
         """
 
         if self.returncode == 1:
-            pattern = r"^cannot ([^ ]+(?: [^ ]+)*?) ([^ ]+): (.+)$"
+            pattern = r'^cannot ([^ ]+(?: [^ ]+)*?) ([^ ]+): (.+)$'
             # only use first line of stderr to match zfs errors
             match = re.search(pattern, self.stderr.splitlines()[0])
             if match:
                 _, dataset, reason = match.groups()
                 if dataset[0] == dataset[-1] == "'":
                     dataset = dataset[1:-1]
-                for error in (DatasetNotFoundError,
-                              DatasetExistsError,
-                              DatasetBusyError,
-                              HoldTagNotFoundError,
-                              HoldTagExistsError):
+                for error in (
+                    DatasetNotFoundError,
+                    DatasetExistsError,
+                    DatasetBusyError,
+                    HoldTagNotFoundError,
+                    HoldTagExistsError,
+                ):
                     if reason == error.strerror:
                         raise error(dataset)
 
         # did not match known errors, defer to superclass
-        super(CompletedProcess, self).check_returncode()
+        super().check_returncode()
 
 
 def set_dry_run(dry_run=True):
     """Set dry run flag"""
     global DRY_RUN
-    DRY_RUN=dry_run
+    DRY_RUN = dry_run
     if DRY_RUN:
         logger = logging.getLogger(__name__)
         logger.warning('DRY_RUN: Ignoring filesystem modification.')
+
 
 def get_dry_run():
     """Return dry run flag value"""
@@ -127,8 +135,7 @@ def check_output(*popenargs, timeout=None, ssh=None, **kwargs):
     if 'input' in kwargs:
         raise ValueError('input argument not allowed, it will be overridden.')
 
-    ret = run(*popenargs, stdout=PIPE, stderr=PIPE, timeout=timeout,
-              universal_newlines=True, ssh=ssh, **kwargs)
+    ret = run(*popenargs, stdout=PIPE, stderr=PIPE, timeout=timeout, universal_newlines=True, ssh=ssh, **kwargs)
     ret.check_returncode()
     out = ret.stdout
 
@@ -167,15 +174,15 @@ def run(*popenargs, timeout=None, check=False, ssh=None, **kwargs):
     if ssh:
         popenargs = (ssh.cmd + popenargs[0], *popenargs[1:])
 
-    logger.log(8, "RUN: {:s}".format(' '.join(*popenargs)))
+    logger.log(8, 'RUN: {:s}'.format(' '.join(*popenargs)))
     with sp.Popen(*popenargs, **kwargs) as process:
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except sp.TimeoutExpired:
             process.kill()
             stdout, stderr = process.communicate()
-            raise sp.TimeoutExpired(process.args, timeout, output=stdout, stderr=stderr)
-        except:
+            raise sp.TimeoutExpired(process.args, timeout, output=stdout, stderr=stderr) from None
+        except Exception:
             process.kill()
             process.wait()
             raise

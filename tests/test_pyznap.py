@@ -1,39 +1,38 @@
 #!/usr/bin/env pytest -v
 """
-    pyznap.test_pyznap
-    ~~~~~~~~~~~~~~
+pyznap.test_pyznap
+~~~~~~~~~~~~~~
 
-    Test pyznap over time.
+Test pyznap over time.
 
-    :copyright: (c) 2018-2019 by Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2018-2019 by Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
-import subprocess as sp
-import sys
-import os
 import logging
 import random
 import string
-from subprocess import Popen, PIPE
-from tempfile import NamedTemporaryFile
+import subprocess as sp
 from datetime import datetime, timedelta
+from subprocess import Popen
+from tempfile import NamedTemporaryFile
+
 import pytest
 
 import pyznap.pyzfs as zfs
-from pyznap.utils import exists
 from pyznap.process import DatasetNotFoundError
+from pyznap.utils import exists
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s',
-                    datefmt='%b %d %H:%M:%S')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%b %d %H:%M:%S')
 logger = logging.getLogger(__name__)
 
 assert exists('faketime')
 
+
 def randomword(length):
     letters = string.ascii_lowercase
     return ''.join(random.choice(letters) for i in range(length))
+
 
 ZPOOL = '/sbin/zpool'
 _word = randomword(8)
@@ -47,8 +46,14 @@ N_WEEKLY = 8
 N_MONTHLY = 12
 N_YEARLY = 3
 
-SNAPSHOTS_REF = {'frequent': N_FREQUENT, 'hourly': N_HOURLY, 'daily': N_DAILY, 'weekly': N_WEEKLY,
-                 'monthly': N_MONTHLY, 'yearly': N_YEARLY}
+SNAPSHOTS_REF = {
+    'frequent': N_FREQUENT,
+    'hourly': N_HOURLY,
+    'daily': N_DAILY,
+    'weekly': N_WEEKLY,
+    'monthly': N_MONTHLY,
+    'yearly': N_YEARLY,
+}
 
 
 @pytest.fixture(scope='module')
@@ -62,13 +67,13 @@ def zpools():
         filename1 = file1.name
 
         # Fix size to 100Mb
-        file0.seek(100*1024**2-1)
+        file0.seek(100 * 1024**2 - 1)
         file0.write(b'0')
         file0.seek(0)
-        file1.seek(100*1024**2-1)
+        file1.seek(100 * 1024**2 - 1)
         file1.write(b'0')
         file1.seek(0)
-        
+
         # Create temporary test pools
         for pool, filename in zip([POOL0, POOL1], [filename0, filename1]):
             try:
@@ -94,20 +99,23 @@ def zpools():
             except sp.CalledProcessError as err:
                 logger.error(err)
 
+
 @pytest.fixture(scope='module')
 def config():
     """Creates a temporary config file and yields its filename"""
 
     with NamedTemporaryFile('w') as file:
-        file.write(f'[{POOL0}]\n'
-                   f'frequent = {N_FREQUENT}\n'
-                   f'hourly = {N_HOURLY}\n'
-                   f'daily = {N_DAILY}\n'
-                   f'weekly = {N_WEEKLY}\n'
-                   f'monthly = {N_MONTHLY}\n'
-                   f'yearly = {N_YEARLY}\n'
-                   f'snap = yes\n'
-                   f'clean = yes\n\n')
+        file.write(
+            f'[{POOL0}]\n'
+            f'frequent = {N_FREQUENT}\n'
+            f'hourly = {N_HOURLY}\n'
+            f'daily = {N_DAILY}\n'
+            f'weekly = {N_WEEKLY}\n'
+            f'monthly = {N_MONTHLY}\n'
+            f'yearly = {N_YEARLY}\n'
+            f'snap = yes\n'
+            f'clean = yes\n\n'
+        )
         file.seek(0)
         yield file.name
 
@@ -117,31 +125,32 @@ def config_send():
     """Creates a temporary config file and yields its filename"""
 
     with NamedTemporaryFile('w') as file:
-        file.write(f'[{POOL0}]\n'
-                   f'frequent = {N_FREQUENT}\n'
-                   f'hourly = {N_HOURLY}\n'
-                   f'daily = {N_DAILY}\n'
-                   f'weekly = {N_WEEKLY}\n'
-                   f'monthly = {N_MONTHLY}\n'
-                   f'yearly = {N_YEARLY}\n'
-                   f'snap = yes\n'
-                   f'clean = yes\n'
-                   f'dest = {POOL1}\n'
-
-                   f'[{POOL1}]\n'
-                   f'frequent = {N_FREQUENT}\n'
-                   f'hourly = {N_HOURLY}\n'
-                   f'daily = {N_DAILY}\n'
-                   f'weekly = {N_WEEKLY}\n'
-                   f'monthly = {N_MONTHLY}\n'
-                   f'yearly = {N_YEARLY}\n'
-                   f'clean = yes\n\n')
+        file.write(
+            f'[{POOL0}]\n'
+            f'frequent = {N_FREQUENT}\n'
+            f'hourly = {N_HOURLY}\n'
+            f'daily = {N_DAILY}\n'
+            f'weekly = {N_WEEKLY}\n'
+            f'monthly = {N_MONTHLY}\n'
+            f'yearly = {N_YEARLY}\n'
+            f'snap = yes\n'
+            f'clean = yes\n'
+            f'dest = {POOL1}\n'
+            f'[{POOL1}]\n'
+            f'frequent = {N_FREQUENT}\n'
+            f'hourly = {N_HOURLY}\n'
+            f'daily = {N_DAILY}\n'
+            f'weekly = {N_WEEKLY}\n'
+            f'monthly = {N_MONTHLY}\n'
+            f'yearly = {N_YEARLY}\n'
+            f'clean = yes\n\n'
+        )
         file.seek(0)
         yield file.name
 
 
 @pytest.mark.slow
-class TestCycle(object):
+class TestCycle:
     def test_2_hours(self, zpools, config):
         """Tests pyznap over 2 hours and checks if the correct amount of 'frequent' snapshots are taken"""
 
@@ -149,9 +158,9 @@ class TestCycle(object):
         fs.destroy(force=True)
 
         start_date = datetime(2014, 1, 1)
-        dates = [start_date + i * timedelta(minutes=1) for i in range(60*2)]
+        dates = [start_date + i * timedelta(minutes=1) for i in range(60 * 2)]
 
-        for n,date in enumerate(dates):
+        for n, date in enumerate(dates):
             faketime = ['faketime', date.strftime('%y-%m-%d %H:%M:%S')]
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
@@ -167,9 +176,8 @@ class TestCycle(object):
             for snap_type, snaps in snapshots.items():
                 assert len(snaps) <= SNAPSHOTS_REF[snap_type]
             # check if after N_FREQUENT runs there are N_FREQUENT 'frequent' snapshots
-            if n+1 >= N_FREQUENT:
+            if n + 1 >= N_FREQUENT:
                 assert len(snapshots['frequent']) == SNAPSHOTS_REF['frequent']
-
 
     def test_2_days(self, zpools, config):
         """Tests pyznap over 2 days and checks if the correct amount of 'frequent' snapshots are taken"""
@@ -178,9 +186,9 @@ class TestCycle(object):
         fs.destroy(force=True)
 
         start_date = datetime(2014, 1, 1)
-        dates = [start_date + i * timedelta(minutes=15) for i in range(4*24*2)]
+        dates = [start_date + i * timedelta(minutes=15) for i in range(4 * 24 * 2)]
 
-        for n,date in enumerate(dates):
+        for n, date in enumerate(dates):
             faketime = ['faketime', date.strftime('%y-%m-%d %H:%M:%S')]
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
@@ -196,9 +204,8 @@ class TestCycle(object):
             for snap_type, snaps in snapshots.items():
                 assert len(snaps) <= SNAPSHOTS_REF[snap_type]
             # check if after N_FREQUENT runs there are N_FREQUENT 'frequent' snapshots
-            if n+1 >= N_FREQUENT:
+            if n + 1 >= N_FREQUENT:
                 assert len(snapshots['frequent']) == SNAPSHOTS_REF['frequent']
-
 
     def test_1_week(self, zpools, config):
         """Tests pyznap over 1 week and checks if the correct amount of 'frequent' & hourly'
@@ -208,9 +215,9 @@ class TestCycle(object):
         fs.destroy(force=True)
 
         start_date = datetime(2014, 1, 1)
-        dates = [start_date + i * timedelta(hours=1) for i in range(24*7)]
+        dates = [start_date + i * timedelta(hours=1) for i in range(24 * 7)]
 
-        for n,date in enumerate(dates):
+        for n, date in enumerate(dates):
             faketime = ['faketime', date.strftime('%y-%m-%d %H:%M:%S')]
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
@@ -226,12 +233,11 @@ class TestCycle(object):
             for snap_type, snaps in snapshots.items():
                 assert len(snaps) <= SNAPSHOTS_REF[snap_type]
             # check if after N_FREQUENT runs there are N_FREQUENT 'frequent' snapshots
-            if n+1 >= N_FREQUENT:
+            if n + 1 >= N_FREQUENT:
                 assert len(snapshots['frequent']) == SNAPSHOTS_REF['frequent']
             # check if after N_HOURLY runs there are N_HOURLY 'hourly' snapshots
-            if n+1 >= N_HOURLY:
+            if n + 1 >= N_HOURLY:
                 assert len(snapshots['hourly']) == SNAPSHOTS_REF['hourly']
-
 
     def test_8_weeks(self, zpools, config):
         """Tests pyznap over 8 weeks and checks if the correct amount of 'frequent', 'hourly' &
@@ -241,9 +247,9 @@ class TestCycle(object):
         fs.destroy(force=True)
 
         start_date = datetime(2014, 1, 1)
-        dates = [start_date + i * timedelta(days=1) for i in range(7*8)]
+        dates = [start_date + i * timedelta(days=1) for i in range(7 * 8)]
 
-        for n,date in enumerate(dates):
+        for n, date in enumerate(dates):
             faketime = ['faketime', date.strftime('%y-%m-%d %H:%M:%S')]
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
@@ -259,15 +265,14 @@ class TestCycle(object):
             for snap_type, snaps in snapshots.items():
                 assert len(snaps) <= SNAPSHOTS_REF[snap_type]
             # check if after N_FREQUENT runs there are N_FREQUENT 'frequent' snapshots
-            if n+1 >= N_FREQUENT:
+            if n + 1 >= N_FREQUENT:
                 assert len(snapshots['frequent']) == SNAPSHOTS_REF['frequent']
             # check if after N-HOURLY runs there are N-HOURLY 'hourly' snapshots
-            if n+1 >= N_HOURLY:
+            if n + 1 >= N_HOURLY:
                 assert len(snapshots['hourly']) == SNAPSHOTS_REF['hourly']
             # check if after N_DAILY runs there are N_DAILY 'daily' snapshots
-            if n+1 >= N_DAILY:
+            if n + 1 >= N_DAILY:
                 assert len(snapshots['daily']) == SNAPSHOTS_REF['daily']
-
 
     def test_6_months(self, zpools, config):
         """Tests pyznap over 6 months and checks if the correct amount of 'frequent', 'hourly',
@@ -277,9 +282,9 @@ class TestCycle(object):
         fs.destroy(force=True)
 
         start_date = datetime(2014, 1, 1)
-        dates = [start_date + i * timedelta(days=7) for i in range(4*6)]
+        dates = [start_date + i * timedelta(days=7) for i in range(4 * 6)]
 
-        for n,date in enumerate(dates):
+        for n, date in enumerate(dates):
             faketime = ['faketime', date.strftime('%y-%m-%d %H:%M:%S')]
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
@@ -295,18 +300,17 @@ class TestCycle(object):
             for snap_type, snaps in snapshots.items():
                 assert len(snaps) <= SNAPSHOTS_REF[snap_type]
             # check if after N_FREQUENT runs there are N_FREQUENT 'frequent' snapshots
-            if n+1 >= N_FREQUENT:
+            if n + 1 >= N_FREQUENT:
                 assert len(snapshots['frequent']) == SNAPSHOTS_REF['frequent']
             # check if after N-HOURLY runs there are N-HOURLY 'hourly' snapshots
-            if n+1 >= N_HOURLY:
+            if n + 1 >= N_HOURLY:
                 assert len(snapshots['hourly']) == SNAPSHOTS_REF['hourly']
             # check if after N_DAILY runs there are N_DAILY 'daily' snapshots
-            if n+1 >= N_DAILY:
+            if n + 1 >= N_DAILY:
                 assert len(snapshots['daily']) == SNAPSHOTS_REF['daily']
             # check if after N_WEEKLY runs there are N_WEEKLY 'weekly' snapshots
-            if n+1 >= N_WEEKLY:
+            if n + 1 >= N_WEEKLY:
                 assert len(snapshots['weekly']) == SNAPSHOTS_REF['weekly']
-
 
     def test_3_years(self, zpools, config):
         """Tests pyznap over 3 years and checks if the correct amount of 'frequent', 'hourly',
@@ -316,9 +320,9 @@ class TestCycle(object):
         fs.destroy(force=True)
 
         start_date = datetime(2014, 1, 1)
-        dates = [start_date + i * timedelta(days=31) for i in range(12*3)]
+        dates = [start_date + i * timedelta(days=31) for i in range(12 * 3)]
 
-        for n,date in enumerate(dates):
+        for n, date in enumerate(dates):
             faketime = ['faketime', date.strftime('%y-%m-%d %H:%M:%S')]
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
@@ -334,21 +338,20 @@ class TestCycle(object):
             for snap_type, snaps in snapshots.items():
                 assert len(snaps) <= SNAPSHOTS_REF[snap_type]
             # check if after N_FREQUENT runs there are N_FREQUENT 'frequent' snapshots
-            if n+1 >= N_FREQUENT:
+            if n + 1 >= N_FREQUENT:
                 assert len(snapshots['frequent']) == SNAPSHOTS_REF['frequent']
             # check if after N-HOURLY runs there are N-HOURLY 'hourly' snapshots
-            if n+1 >= N_HOURLY:
+            if n + 1 >= N_HOURLY:
                 assert len(snapshots['hourly']) == SNAPSHOTS_REF['hourly']
             # check if after N_DAILY runs there are N_DAILY 'daily' snapshots
-            if n+1 >= N_DAILY:
+            if n + 1 >= N_DAILY:
                 assert len(snapshots['daily']) == SNAPSHOTS_REF['daily']
             # check if after N_WEEKLY runs there are N_WEEKLY 'weekly' snapshots
-            if n+1 >= N_WEEKLY:
+            if n + 1 >= N_WEEKLY:
                 assert len(snapshots['weekly']) == SNAPSHOTS_REF['weekly']
             # check if after N_MONTHLY runs there are N_MONTHLY 'monthly' snapshots
-            if n+1 >= N_MONTHLY:
+            if n + 1 >= N_MONTHLY:
                 assert len(snapshots['monthly']) == SNAPSHOTS_REF['monthly']
-
 
     def test_50_years(self, zpools, config):
         """Tests pyznap over 50 years and checks if the correct amount of 'frequent', 'hourly',
@@ -360,7 +363,7 @@ class TestCycle(object):
         # have to start at 1969 as faketime only goes from 1969 to 2068
         dates = [datetime(1969 + i, 1, 1) for i in range(50)]
 
-        for n,date in enumerate(dates):
+        for n, date in enumerate(dates):
             faketime = ['faketime', date.strftime('%y-%m-%d %H:%M:%S')]
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
@@ -376,39 +379,39 @@ class TestCycle(object):
             for snap_type, snaps in snapshots.items():
                 assert len(snaps) <= SNAPSHOTS_REF[snap_type]
             # check if after N_FREQUENT runs there are N_FREQUENT 'frequent' snapshots
-            if n+1 >= N_FREQUENT:
+            if n + 1 >= N_FREQUENT:
                 assert len(snapshots['frequent']) == SNAPSHOTS_REF['frequent']
             # check if after N-HOURLY runs there are N-HOURLY 'hourly' snapshots
-            if n+1 >= N_HOURLY:
+            if n + 1 >= N_HOURLY:
                 assert len(snapshots['hourly']) == SNAPSHOTS_REF['hourly']
             # check if after N_DAILY runs there are N_DAILY 'daily' snapshots
-            if n+1 >= N_DAILY:
+            if n + 1 >= N_DAILY:
                 assert len(snapshots['daily']) == SNAPSHOTS_REF['daily']
             # check if after N_WEEKLY runs there are N_WEEKLY 'weekly' snapshots
-            if n+1 >= N_WEEKLY:
+            if n + 1 >= N_WEEKLY:
                 assert len(snapshots['weekly']) == SNAPSHOTS_REF['weekly']
             # check if after N_MONTHLY runs there are N_MONTHLY 'monthly' snapshots
-            if n+1 >= N_MONTHLY:
+            if n + 1 >= N_MONTHLY:
                 assert len(snapshots['monthly']) == SNAPSHOTS_REF['monthly']
             # check if after N_YEARLY runs there are N_YEARLY 'yearly' snapshots
-            if n+1 >= N_YEARLY:
+            if n + 1 >= N_YEARLY:
                 assert len(snapshots['yearly']) == SNAPSHOTS_REF['yearly']
 
 
 @pytest.mark.slow
-class TestSend(object):
+class TestSend:
     def test_50_years(self, zpools, config_send):
         """Tests pyznap over 50 years and checks if snapshots are sent correctly"""
 
         fs0, fs1 = zpools
         fs0.destroy(force=True)
         fs1.destroy(force=True)
-        zfs.create('{:s}/sub1'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub1')
 
         # have to start at 1969 as faketime only goes from 1969 to 2068
         dates = [datetime(1969 + i, 1, 1) for i in range(50)]
 
-        for n,date in enumerate(dates):
+        for n, date in enumerate(dates):
             faketime = ['faketime', date.strftime('%y-%m-%d %H:%M:%S')]
             pyznap_take = faketime + ['pyznap', '--config', config_send, 'snap', '--take']
             pyznap_clean = faketime + ['pyznap', '--config', config_send, 'snap', '--clean']
@@ -428,29 +431,28 @@ class TestSend(object):
             for snap_type, snaps in snapshots.items():
                 assert len(snaps) <= SNAPSHOTS_REF[snap_type]
             # check if after N_FREQUENT runs there are N_FREQUENT 'frequent' snapshots
-            if n+1 >= N_FREQUENT:
+            if n + 1 >= N_FREQUENT:
                 assert len(snapshots['frequent']) == SNAPSHOTS_REF['frequent']
             # check if after N-HOURLY runs there are N-HOURLY 'hourly' snapshots
-            if n+1 >= N_HOURLY:
+            if n + 1 >= N_HOURLY:
                 assert len(snapshots['hourly']) == SNAPSHOTS_REF['hourly']
             # check if after N_DAILY runs there are N_DAILY 'daily' snapshots
-            if n+1 >= N_DAILY:
+            if n + 1 >= N_DAILY:
                 assert len(snapshots['daily']) == SNAPSHOTS_REF['daily']
             # check if after N_WEEKLY runs there are N_WEEKLY 'weekly' snapshots
-            if n+1 >= N_WEEKLY:
+            if n + 1 >= N_WEEKLY:
                 assert len(snapshots['weekly']) == SNAPSHOTS_REF['weekly']
             # check if after N_MONTHLY runs there are N_MONTHLY 'monthly' snapshots
-            if n+1 >= N_MONTHLY:
+            if n + 1 >= N_MONTHLY:
                 assert len(snapshots['monthly']) == SNAPSHOTS_REF['monthly']
             # check if after N_YEARLY runs there are N_YEARLY 'yearly' snapshots
-            if n+1 >= N_YEARLY:
+            if n + 1 >= N_YEARLY:
                 assert len(snapshots['yearly']) == SNAPSHOTS_REF['yearly']
 
             # check if filesystem is completely replicated on dest
             fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
             fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
             assert set(fs0_children) == set(fs1_children)
-
 
     def test_create_new(self, zpools, config_send):
         """Tests pyznap over 10 years and checks if newly created filesystems are correctly
@@ -463,9 +465,9 @@ class TestSend(object):
         # have to start at 1969 as faketime only goes from 1969 to 2068
         dates = [datetime(1969 + i, 1, 1) for i in range(10)]
 
-        for n,date in enumerate(dates):
+        for n, date in enumerate(dates):
             # at every step create a new subfilesystem
-            zfs.create('{:s}/sub{:d}'.format(fs0.name, n))
+            zfs.create(f'{fs0.name:s}/sub{n:d}')
 
             faketime = ['faketime', date.strftime('%y-%m-%d %H:%M:%S')]
             pyznap_take = faketime + ['pyznap', '--config', config_send, 'snap', '--take']
@@ -486,22 +488,22 @@ class TestSend(object):
             for snap_type, snaps in snapshots.items():
                 assert len(snaps) <= SNAPSHOTS_REF[snap_type]
             # check if after N_FREQUENT runs there are N_FREQUENT 'frequent' snapshots
-            if n+1 >= N_FREQUENT:
+            if n + 1 >= N_FREQUENT:
                 assert len(snapshots['frequent']) == SNAPSHOTS_REF['frequent']
             # check if after N-HOURLY runs there are N-HOURLY 'hourly' snapshots
-            if n+1 >= N_HOURLY:
+            if n + 1 >= N_HOURLY:
                 assert len(snapshots['hourly']) == SNAPSHOTS_REF['hourly']
             # check if after N_DAILY runs there are N_DAILY 'daily' snapshots
-            if n+1 >= N_DAILY:
+            if n + 1 >= N_DAILY:
                 assert len(snapshots['daily']) == SNAPSHOTS_REF['daily']
             # check if after N_WEEKLY runs there are N_WEEKLY 'weekly' snapshots
-            if n+1 >= N_WEEKLY:
+            if n + 1 >= N_WEEKLY:
                 assert len(snapshots['weekly']) == SNAPSHOTS_REF['weekly']
             # check if after N_MONTHLY runs there are N_MONTHLY 'monthly' snapshots
-            if n+1 >= N_MONTHLY:
+            if n + 1 >= N_MONTHLY:
                 assert len(snapshots['monthly']) == SNAPSHOTS_REF['monthly']
             # check if after N_YEARLY runs there are N_YEARLY 'yearly' snapshots
-            if n+1 >= N_YEARLY:
+            if n + 1 >= N_YEARLY:
                 assert len(snapshots['yearly']) == SNAPSHOTS_REF['yearly']
 
             # check if filesystem is completely replicated on dest
@@ -511,7 +513,7 @@ class TestSend(object):
 
 
 @pytest.mark.slow
-class TestSpecialCases(object):
+class TestSpecialCases:
     def test_winter_time(self, zpools, config):
         """Tests if pyznap does not crash when switching to winter time"""
 

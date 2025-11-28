@@ -1,29 +1,34 @@
 """
-    pyznap.utils
-    ~~~~~~~~~~~~~~
+pyznap.utils
+~~~~~~~~~~~~~~
 
-    Helper functions.
+Helper functions.
 
-    :copyright: (c) 2018-2019 by Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2018-2019 by Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
 import glob
+import logging
 import os
 import re
-import logging
-from subprocess import Popen, PIPE, TimeoutExpired, CalledProcessError
+
+# TODO: Migrate from pkg_resources to importlib.resources when dropping Python 3.6-3.8 support
+import warnings
+from configparser import (
+    ConfigParser,
+    DuplicateOptionError,
+    DuplicateSectionError,
+    MissingSectionHeaderError,
+    NoOptionError,
+)
+from subprocess import PIPE, CalledProcessError, TimeoutExpired
+
 from .process import run
 from .ssh import SSHException
 
-from datetime import datetime
-from configparser import (ConfigParser, NoOptionError, MissingSectionHeaderError,
-                          DuplicateSectionError, DuplicateOptionError)
-# TODO: Migrate from pkg_resources to importlib.resources when dropping Python 3.6-3.8 support
-import warnings
-warnings.filterwarnings("ignore", message="pkg_resources is deprecated", category=UserWarning)
-from pkg_resources import resource_string
-
+warnings.filterwarnings('ignore', message='pkg_resources is deprecated', category=UserWarning)
+from pkg_resources import resource_string  # noqa: E402
 
 SNAPSHOT_TYPES = ('frequent', 'hourly', 'daily', 'weekly', 'monthly', 'yearly')
 
@@ -60,7 +65,7 @@ def validate_config(config):
                 if not isinstance(val, int):
                     errors.append(f"{name}: {snap_type} must be an integer, got '{val}'")
                 elif val < 0:
-                    errors.append(f"{name}: {snap_type} must be >= 0, got {val}")
+                    errors.append(f'{name}: {snap_type} must be >= 0, got {val}')
 
         # 2. Check boolean options have valid values
         for bool_opt in ['snap', 'clean', 'ignore_not_existing']:
@@ -77,55 +82,67 @@ def validate_config(config):
             dest_keys = entry.get('dest_keys')
             if dest_keys and isinstance(dest_keys, list):
                 if len(dest_keys) != dest_count:
-                    errors.append(f"{name}: dest has {dest_count} entries but dest_keys has {len(dest_keys)} "
-                                f"(must be equal or omit dest_keys)")
+                    errors.append(
+                        f'{name}: dest has {dest_count} entries but dest_keys has {len(dest_keys)} '
+                        f'(must be equal or omit dest_keys)'
+                    )
 
             # Check compress
             compress = entry.get('compress')
             if compress and isinstance(compress, list):
                 if len(compress) != dest_count:
-                    errors.append(f"{name}: dest has {dest_count} entries but compress has {len(compress)} "
-                                f"(must be equal or omit compress)")
+                    errors.append(
+                        f'{name}: dest has {dest_count} entries but compress has {len(compress)} '
+                        f'(must be equal or omit compress)'
+                    )
 
             # Check exclude
             exclude = entry.get('exclude')
             if exclude and isinstance(exclude, list):
                 if len(exclude) != dest_count:
-                    errors.append(f"{name}: dest has {dest_count} entries but exclude has {len(exclude)} "
-                                f"(must be equal or omit exclude)")
+                    errors.append(
+                        f'{name}: dest has {dest_count} entries but exclude has {len(exclude)} '
+                        f'(must be equal or omit exclude)'
+                    )
 
             # Check raw_send
             raw_send = entry.get('raw_send')
             if raw_send and isinstance(raw_send, list):
                 if len(raw_send) != dest_count:
-                    errors.append(f"{name}: dest has {dest_count} entries but raw_send has {len(raw_send)} "
-                                f"(must be equal or omit raw_send)")
+                    errors.append(
+                        f'{name}: dest has {dest_count} entries but raw_send has {len(raw_send)} '
+                        f'(must be equal or omit raw_send)'
+                    )
 
             # Check resume
             resume = entry.get('resume')
             if resume and isinstance(resume, list):
                 if len(resume) != dest_count:
-                    errors.append(f"{name}: dest has {dest_count} entries but resume has {len(resume)} "
-                                f"(must be equal or omit resume)")
+                    errors.append(
+                        f'{name}: dest has {dest_count} entries but resume has {len(resume)} '
+                        f'(must be equal or omit resume)'
+                    )
 
             # Check retries
             retries = entry.get('retries')
             if retries and isinstance(retries, list):
                 if len(retries) != dest_count:
-                    errors.append(f"{name}: dest has {dest_count} entries but retries has {len(retries)} "
-                                f"(must be equal or omit retries)")
+                    errors.append(
+                        f'{name}: dest has {dest_count} entries but retries has {len(retries)} '
+                        f'(must be equal or omit retries)'
+                    )
 
         # 4. Check SSH key files exist
         key = entry.get('key')
         if key and key is not None and not os.path.isfile(key):
-            errors.append(f"{name}: SSH key file not found: {key}")
+            errors.append(f'{name}: SSH key file not found: {key}')
 
         # Check dest_keys files exist
         dest_keys = entry.get('dest_keys')
         if dest_keys and isinstance(dest_keys, list):
             for i, key in enumerate(dest_keys):
                 if key and key is not None and not os.path.isfile(key):
-                    errors.append(f"{name}: dest_keys[{i}] file not found: {key}")
+                    errors.append(f'{name}: dest_keys[{i}] file not found: {key}')
 
         # 5. Warn if dest is set but snap is not enabled (nothing to send)
         has_dest = dest and len(dest) > 0
@@ -133,18 +150,17 @@ def validate_config(config):
 
         # Check if any snapshot type is configured
         has_snapshot_config = any(
-            entry.get(st) and isinstance(entry.get(st), int) and entry.get(st) > 0
-            for st in SNAPSHOT_TYPES
+            entry.get(st) and isinstance(entry.get(st), int) and entry.get(st) > 0 for st in SNAPSHOT_TYPES
         )
 
         if has_dest and not snap_enabled and has_snapshot_config:
-            warnings.append(f"{name}: has dest configured but snap=no - no snapshots will be sent "
-                          f"(set snap=yes or remove dest)")
+            warnings.append(
+                f'{name}: has dest configured but snap=no - no snapshots will be sent (set snap=yes or remove dest)'
+            )
 
         # 6. Warn if snap is enabled but no snapshot types configured
         if snap_enabled and not has_snapshot_config:
-            warnings.append(f"{name}: snap=yes but no snapshot types configured "
-                          f"(set hourly, daily, weekly, etc.)")
+            warnings.append(f'{name}: snap=yes but no snapshot types configured (set hourly, daily, weekly, etc.)')
 
         # 7. Check max_depth is valid
         max_depth = entry.get('max_depth')
@@ -153,12 +169,12 @@ def validate_config(config):
 
     # Log all warnings
     for warning in warnings:
-        logger.warning(f"Config validation warning: {warning}")
+        logger.warning(f'Config validation warning: {warning}')
 
     # Log and return errors
     if errors:
         for error in errors:
-            logger.error(f"Config validation error: {error}")
+            logger.error(f'Config validation error: {error}')
 
     return errors
 
@@ -180,17 +196,16 @@ def exists(executable='', ssh=None):
     """
 
     logger = logging.getLogger(__name__)
-    name_log = '{:s}@{:s}'.format(ssh.user, ssh.host) if ssh else 'localhost'
+    name_log = f'{ssh.user:s}@{ssh.host:s}' if ssh else 'localhost'
 
     cmd = ['which', executable]
     try:
         retcode = run(cmd, stdout=PIPE, stderr=PIPE, timeout=5, universal_newlines=True, ssh=ssh).returncode
     except (TimeoutExpired, SSHException) as err:
-        logger.error('Error while checking if {:s} exists on {:s}: \'{}\'...'
-                     .format(executable, name_log, err))
+        logger.error(f"Error while checking if {executable:s} exists on {name_log:s}: '{err}'...")
         return False
 
-    return not bool(retcode) # return False if retcode != 0
+    return not bool(retcode)  # return False if retcode != 0
 
 
 def read_config(path):
@@ -219,22 +234,37 @@ def read_config(path):
     else:
         cfgfiles = glob.glob(os.path.expanduser(path))
         if cfgfiles == []:
-            logger.error('Error while loading config: File {:s} does not exist.'.format(path))
+            logger.error(f'Error while loading config: File {path:s} does not exist.')
             return None
 
     parser = ConfigParser()
     try:
         files = parser.read(cfgfiles)
-        logger.info('Parsed configs: '+str(files))
+        logger.info('Parsed configs: ' + str(files))
     except (MissingSectionHeaderError, DuplicateSectionError, DuplicateOptionError) as e:
-        logger.error('Error while loading config: {}'.format(e))
+        logger.error(f'Error while loading config: {e}')
         return None
 
     config = []
-    options = ['key', 'snap', 'clean',
-               'dest', 'dest_keys', 'compress', 'exclude', 'raw_send', 'resume', 'dest_auto_create',
-               'retries', 'retry_interval', 'ignore_not_existing', 'send_last_snapshot', 'max_depth',
-               'snap_exclude_property', 'send_exclude_property']
+    options = [
+        'key',
+        'snap',
+        'clean',
+        'dest',
+        'dest_keys',
+        'compress',
+        'exclude',
+        'raw_send',
+        'resume',
+        'dest_auto_create',
+        'retries',
+        'retry_interval',
+        'ignore_not_existing',
+        'send_last_snapshot',
+        'max_depth',
+        'snap_exclude_property',
+        'send_exclude_property',
+    ]
     options += list(SNAPSHOT_TYPES)
 
     for section in parser.sections():
@@ -254,13 +284,17 @@ def read_config(path):
                     try:
                         dic[option] = int(value)
                     except ValueError:
-                        logger.error(f"Invalid value for {option} in section [{section}]: '{value}' (must be an integer)")
+                        logger.error(
+                            f"Invalid value for {option} in section [{section}]: '{value}' (must be an integer)"
+                        )
                         return None
-                elif option in [ 'max_depth']:
+                elif option in ['max_depth']:
                     try:
                         dic[option] = int(value) if value and value != 'no' else -1
                     except ValueError:
-                        logger.error(f"Invalid value for max_depth in section [{section}]: '{value}' (must be an integer or 'no')")
+                        logger.error(
+                            f"Invalid value for max_depth in section [{section}]: '{value}' (must be an integer or 'no')"
+                        )
                         return None
                 elif option in ['snap', 'clean', 'ignore_not_existing']:
                     dic[option] = {'yes': True, 'no': False}.get(value.lower(), None)
@@ -269,14 +303,13 @@ def read_config(path):
                 elif option in ['dest', 'compress', 'send_last_snapshot']:
                     dic[option] = [i.strip() for i in value.split(',')]
                 elif option in ['dest_keys']:
-                    dic[option] = [i.strip() if os.path.isfile(i.strip()) else None
-                                   for i in value.split(',')]
+                    dic[option] = [i.strip() if os.path.isfile(i.strip()) else None for i in value.split(',')]
                 elif option in ['exclude']:
-                    dic[option] = [[i.strip() for i in s.strip().split(' ')] if s.strip() else None
-                                    for s in value.split(',')]
+                    dic[option] = [
+                        [i.strip() for i in s.strip().split(' ')] if s.strip() else None for s in value.split(',')
+                    ]
                 elif option in ['raw_send', 'resume', 'dest_auto_create']:
-                    dic[option] = [{'yes': True, 'no': False}.get(i.strip().lower(), None)
-                                   for i in value.split(',')]
+                    dic[option] = [{'yes': True, 'no': False}.get(i.strip().lower(), None) for i in value.split(',')]
                 elif option in ['retries', 'retry_interval']:
                     dic[option] = [int(i) for i in value.split(',')]
 
@@ -287,8 +320,9 @@ def read_config(path):
     for child in config:
         child['_parent'] = None
         for parent in reversed(config):
-            if (child['name'].startswith(parent['name']+'/')
-                    or (parent['name']=='' and parent['name'] != child['name'])):
+            if child['name'].startswith(parent['name'] + '/') or (
+                parent['name'] == '' and parent['name'] != child['name']
+            ):
                 child['_parent'] = parent['name']
                 break
 
@@ -298,14 +332,24 @@ def read_config(path):
             if parent['name'] == child['_parent']:
                 child_parent = '/'.join(child['name'].split('/')[:-1])  # get parent of child filesystem
                 if child_parent.startswith(parent['name']):
-                    for option in ['key', 'snap', 'clean', 'ignore_not_existing', 'send_last_snapshot',
-                        'max_depth', 'snap_exclude_property', 'send_exclude_property'] + list(SNAPSHOT_TYPES):
+                    for option in [
+                        'key',
+                        'snap',
+                        'clean',
+                        'ignore_not_existing',
+                        'send_last_snapshot',
+                        'max_depth',
+                        'snap_exclude_property',
+                        'send_exclude_property',
+                    ] + list(SNAPSHOT_TYPES):
                         child[option] = child[option] if child[option] is not None else parent[option]
 
     # Validate configuration
     validation_errors = validate_config(config)
     if validation_errors:
-        logger.error('Configuration validation failed with {} error(s). Please fix your config file.'.format(len(validation_errors)))
+        logger.error(
+            f'Configuration validation failed with {len(validation_errors)} error(s). Please fix your config file.'
+        )
         return None
 
     return config
@@ -348,36 +392,35 @@ def create_config(path):
     logger = logging.getLogger(__name__)
 
     CONFIG_FILE = os.path.join(path, 'pyznap.conf')
-    config = resource_string(__name__, 'config/pyznap.conf').decode("utf-8")
+    config = resource_string(__name__, 'config/pyznap.conf').decode('utf-8')
 
     logger.info('Initial setup...')
 
     if not os.path.isdir(path):
-        logger.info('Creating directory {:s}...'.format(path))
+        logger.info(f'Creating directory {path:s}...')
         try:
             os.mkdir(path, mode=int('755', base=8))
         except (PermissionError, FileNotFoundError, OSError) as e:
-            logger.error('Could not create {:s}: {}'.format(path, e))
+            logger.error(f'Could not create {path:s}: {e}')
             logger.error('Aborting setup...')
             return 1
     else:
-        logger.info('Directory {:s} does already exist...'.format(path))
+        logger.info(f'Directory {path:s} does already exist...')
 
     if not os.path.isfile(CONFIG_FILE):
-        logger.info('Creating sample config {:s}...'.format(CONFIG_FILE))
+        logger.info(f'Creating sample config {CONFIG_FILE:s}...')
         try:
             with open(CONFIG_FILE, 'w') as file:
                 file.write(config)
-        except (PermissionError, FileNotFoundError, IOError, OSError) as e:
-            logger.error('Could not write to file {:s}: {}'.format(CONFIG_FILE, e))
+        except (PermissionError, FileNotFoundError, OSError) as e:
+            logger.error(f'Could not write to file {CONFIG_FILE:s}: {e}')
         else:
             try:
                 os.chmod(CONFIG_FILE, mode=int('644', base=8))
-            except (PermissionError, IOError, OSError) as e:
-                logger.error('Could not set correct permissions on file {:s}. Please do so manually...'
-                             .format(CONFIG_FILE))
+            except (PermissionError, OSError):
+                logger.error(f'Could not set correct permissions on file {CONFIG_FILE:s}. Please do so manually...')
     else:
-        logger.info('File {:s} does already exist...'.format(CONFIG_FILE))
+        logger.info(f'File {CONFIG_FILE:s} does already exist...')
 
     return 0
 
@@ -400,24 +443,20 @@ def check_recv(fsname, ssh=None):
     """
 
     logger = logging.getLogger(__name__)
-    fsname_log = '{:s}@{:s}:{:s}'.format(ssh.user, ssh.host, fsname) if ssh else fsname
+    fsname_log = f'{ssh.user:s}@{ssh.host:s}:{fsname:s}' if ssh else fsname
 
     try:
-        out = run(['ps', '-Ao', 'args='], stdout=PIPE, stderr=PIPE, timeout=5,
-                  universal_newlines=True, ssh=ssh).stdout
+        out = run(['ps', '-Ao', 'args='], stdout=PIPE, stderr=PIPE, timeout=5, universal_newlines=True, ssh=ssh).stdout
     except (TimeoutExpired, SSHException) as err:
-        logger.error('Error while checking \'zfs receive\' on {:s}: \'{}\'...'
-                     .format(fsname_log, err))
+        logger.error(f"Error while checking 'zfs receive' on {fsname_log:s}: '{err}'...")
         return True
     except CalledProcessError as err:
-        logger.error('Error while checking \'zfs receive\' on {:s}: \'{:s}\'...'
-                     .format(fsname_log, err.stderr.rstrip()))
+        logger.error(f"Error while checking 'zfs receive' on {fsname_log:s}: '{err.stderr.rstrip():s}'...")
         return True
     else:
-        match = re.search(r'zfs (receive|recv).*({:s})(?=\n)'.format(fsname), out)
+        match = re.search(rf'zfs (receive|recv).*({fsname:s})(?=\n)', out)
         if match:
-            logger.error('Cannot send to {:s}, process \'{:s}\' already running...'
-                         .format(fsname_log, match.group()))
+            logger.error(f"Cannot send to {fsname_log:s}, process '{match.group():s}' already running...")
             return True
 
     return False
@@ -439,7 +478,7 @@ def bytes_fmt(num):
 
     for x in ['B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
         if num < 1024:
-            return "{:3.1f}{:s}".format(num, x)
+            return f'{num:3.1f}{x:s}'
         num /= 1024
     else:
-        return "{:3.1f}{:s}".format(num, 'Y')
+        return '{:3.1f}{:s}'.format(num, 'Y')

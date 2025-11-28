@@ -1,40 +1,38 @@
 #!/usr/bin/env pytest -v
 """
-    pyznap.test_functions
-    ~~~~~~~~~~~~~~
+pyznap.test_functions
+~~~~~~~~~~~~~~
 
-    Tests for pyznap functions.
+Tests for pyznap functions.
 
-    :copyright: (c) 2018-2019 by Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2018-2019 by Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
-import subprocess as sp
-import sys
-import os
+import fnmatch
 import logging
 import random
 import string
-import fnmatch
+import subprocess as sp
 from tempfile import NamedTemporaryFile
-from datetime import datetime
+
 import pytest
 
 import pyznap.pyzfs as zfs
-from pyznap.utils import read_config, parse_name
 from pyznap.clean import clean_config
-from pyznap.take import take_config
-from pyznap.send import send_config
 from pyznap.process import DatasetNotFoundError
+from pyznap.send import send_config
+from pyznap.take import take_config
+from pyznap.utils import parse_name, read_config
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s',
-                    datefmt='%b %d %H:%M:%S')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%b %d %H:%M:%S')
 logger = logging.getLogger(__name__)
+
 
 def randomword(length):
     letters = string.ascii_lowercase
     return ''.join(random.choice(letters) for i in range(length))
+
 
 @pytest.fixture(scope='module')
 def zpools():
@@ -52,13 +50,13 @@ def zpools():
         filename1 = file1.name
 
         # Fix size to 100Mb
-        file0.seek(100*1024**2-1)
+        file0.seek(100 * 1024**2 - 1)
         file0.write(b'0')
         file0.seek(0)
-        file1.seek(100*1024**2-1)
+        file1.seek(100 * 1024**2 - 1)
         file1.write(b'0')
         file1.seek(0)
-        
+
         # Create temporary test pools
         for pool, filename in zip([pool0, pool1], [filename0, filename1]):
             try:
@@ -85,7 +83,7 @@ def zpools():
                 logger.error(err)
 
 
-class TestUtils(object):
+class TestUtils:
     def test_read_config(self):
         with NamedTemporaryFile('w') as file:
             name = file.name
@@ -121,50 +119,52 @@ class TestUtils(object):
             conf0, conf1, conf2, conf3 = config
 
             assert conf0['name'] == 'rpool'
-            assert conf0['key'] == None
+            assert conf0['key'] is None
             assert conf0['frequent'] == 4
             assert conf0['hourly'] == 24
             assert conf0['daily'] == 7
             assert conf0['weekly'] == 4
             assert conf0['monthly'] == 12
             assert conf0['yearly'] == 2
-            assert conf0['snap'] == True
-            assert conf0['clean'] == True
+            assert conf0['snap']
+            assert conf0['clean']
             assert conf0['dest'] == ['backup', 'tank']
-            assert conf0['dest_keys'] == None
+            assert conf0['dest_keys'] is None
 
             assert conf1['name'] == 'rpool/data'
-            assert conf1['key'] == None
+            assert conf1['key'] is None
             assert conf1['frequent'] == 4
             assert conf1['hourly'] == 12
             assert conf1['daily'] == 7
             assert conf1['weekly'] == 4
             assert conf1['monthly'] == 0
             assert conf1['yearly'] == 2
-            assert conf1['snap'] == True
-            assert conf1['clean'] == False
+            assert conf1['snap']
+            assert not conf1['clean']
             assert conf1['dest'] == ['backup/data', 'tank/data', 'rpool/data']
-            assert conf1['dest_keys'] == None
+            assert conf1['dest_keys'] is None
             assert conf1['compress'] == ['lzop', 'pigz', 'gzip']
 
             assert conf2['name'] == 'rpool/data_2'
-            assert conf2['key'] == None
+            assert conf2['key'] is None
             assert conf2['frequent'] == 4
             assert conf2['hourly'] == 24
             assert conf2['daily'] == 14
             assert conf2['weekly'] == 4
             assert conf2['monthly'] == 12
             assert conf2['yearly'] == 0
-            assert conf2['snap'] == True
-            assert conf2['clean'] == True
-            assert conf2['dest'] == None
-            assert conf2['dest_keys'] == None
+            assert conf2['snap']
+            assert conf2['clean']
+            assert conf2['dest'] is None
+            assert conf2['dest_keys'] is None
 
             assert conf3['name'] == 'tank'
             assert conf3['dest'] == ['backup/tank', 'rpool/tank', 'data/tank', 'zpool/tank']
-            assert conf3['exclude'] == [None, ['tank/media/*', 'tank/data*', 'tank/home/*'], ['tank/media*', 'tank/home*']]
-
-
+            assert conf3['exclude'] == [
+                None,
+                ['tank/media/*', 'tank/data*', 'tank/home/*'],
+                ['tank/media*', 'tank/home*'],
+            ]
 
     def test_parse_name(self):
         _type, fsname, user, host, port = parse_name('ssh:23:user@hostname:rpool/data')
@@ -177,17 +177,27 @@ class TestUtils(object):
         _type, fsname, user, host, port = parse_name('rpool/data')
         assert _type == 'local'
         assert fsname == 'rpool/data'
-        assert user == None
-        assert host == None
-        assert port == None
+        assert user is None
+        assert host is None
+        assert port is None
 
 
-class TestSnapshot(object):
+class TestSnapshot:
     @pytest.mark.dependency()
     def test_take_snapshot(self, zpools):
         fs, _ = zpools
-        config = [{'name': fs.name, 'frequent': 1, 'hourly': 1, 'daily': 1, 'weekly': 1,
-                   'monthly': 1, 'yearly': 1, 'snap': True}]
+        config = [
+            {
+                'name': fs.name,
+                'frequent': 1,
+                'hourly': 1,
+                'daily': 1,
+                'weekly': 1,
+                'monthly': 1,
+                'yearly': 1,
+                'snap': True,
+            }
+        ]
         take_config(config)
         take_config(config)
 
@@ -199,12 +209,21 @@ class TestSnapshot(object):
         for snap_type, snaps in snapshots.items():
             assert len(snaps) == 1
 
-
     @pytest.mark.dependency(depends=['TestSnapshot::test_take_snapshot'])
     def test_clean_snapshot(self, zpools):
         fs, _ = zpools
-        config = [{'name': fs.name, 'frequent': 0, 'hourly': 0, 'daily': 0, 'weekly': 0,
-                   'monthly': 0, 'yearly': 0, 'clean': True}]
+        config = [
+            {
+                'name': fs.name,
+                'frequent': 0,
+                'hourly': 0,
+                'daily': 0,
+                'weekly': 0,
+                'monthly': 0,
+                'yearly': 0,
+                'clean': True,
+            }
+        ]
         clean_config(config)
 
         snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -215,22 +234,41 @@ class TestSnapshot(object):
         for snap_type, snaps in snapshots.items():
             assert len(snaps) == config[0][snap_type]
 
-
     @pytest.mark.dependency(depends=['TestSnapshot::test_clean_snapshot'])
     def test_take_snapshot_recursive(self, zpools):
         fs, _ = zpools
         fs.destroy(force=True)
-        config = [{'name': fs.name, 'frequent': 1, 'hourly': 1, 'daily': 1, 'weekly': 1,
-                   'monthly': 1, 'yearly': 1, 'snap': True}]
+        config = [
+            {
+                'name': fs.name,
+                'frequent': 1,
+                'hourly': 1,
+                'daily': 1,
+                'weekly': 1,
+                'monthly': 1,
+                'yearly': 1,
+                'snap': True,
+            }
+        ]
         take_config(config)
         fs.snapshots()[-1].destroy(force=True)
         fs.snapshots()[-1].destroy(force=True)
 
-        sub1 = zfs.create('{:s}/sub1'.format(fs.name))
-        abc = zfs.create('{:s}/sub1/abc'.format(fs.name))
-        sub1_abc = zfs.create('{:s}/sub1_abc'.format(fs.name))
-        config += [{'name': '{}/sub1'.format(fs), 'frequent': 1, 'hourly': 1, 'daily': 1, 'weekly': 1,
-                    'monthly': 1, 'yearly': 1, 'snap': False}]
+        sub1 = zfs.create(f'{fs.name:s}/sub1')
+        abc = zfs.create(f'{fs.name:s}/sub1/abc')
+        sub1_abc = zfs.create(f'{fs.name:s}/sub1_abc')
+        config += [
+            {
+                'name': f'{fs}/sub1',
+                'frequent': 1,
+                'hourly': 1,
+                'daily': 1,
+                'weekly': 1,
+                'monthly': 1,
+                'yearly': 1,
+                'snap': False,
+            }
+        ]
         take_config(config)
 
         # Check fs
@@ -269,34 +307,85 @@ class TestSnapshot(object):
         for snap_type, snaps in snapshots.items():
             assert len(snaps) == config[0][snap_type]
 
-
     @pytest.mark.dependency(depends=['TestSnapshot::test_take_snapshot_recursive'])
     def test_clean_recursive(self, zpools):
         fs, _ = zpools
         fs.destroy(force=True)
-        sub1 = zfs.create('{:s}/sub1'.format(fs.name))
-        abc = zfs.create('{:s}/sub1/abc'.format(fs.name))
-        abc_efg = zfs.create('{:s}/sub1/abc_efg'.format(fs.name))
-        sub2 = zfs.create('{:s}/sub2'.format(fs.name))
-        efg = zfs.create('{:s}/sub2/efg'.format(fs.name))
-        hij = zfs.create('{:s}/sub2/efg/hij'.format(fs.name))
-        klm = zfs.create('{:s}/sub2/efg/hij/klm'.format(fs.name))
-        sub3 = zfs.create('{:s}/sub3'.format(fs.name))
+        sub1 = zfs.create(f'{fs.name:s}/sub1')
+        abc = zfs.create(f'{fs.name:s}/sub1/abc')
+        abc_efg = zfs.create(f'{fs.name:s}/sub1/abc_efg')
+        sub2 = zfs.create(f'{fs.name:s}/sub2')
+        efg = zfs.create(f'{fs.name:s}/sub2/efg')
+        hij = zfs.create(f'{fs.name:s}/sub2/efg/hij')
+        klm = zfs.create(f'{fs.name:s}/sub2/efg/hij/klm')
+        sub3 = zfs.create(f'{fs.name:s}/sub3')
 
-        config = [{'name': fs.name, 'frequent': 1, 'hourly': 1, 'daily': 1, 'weekly': 1,
-                   'monthly': 1, 'yearly': 1, 'snap': True}]
+        config = [
+            {
+                'name': fs.name,
+                'frequent': 1,
+                'hourly': 1,
+                'daily': 1,
+                'weekly': 1,
+                'monthly': 1,
+                'yearly': 1,
+                'snap': True,
+            }
+        ]
         take_config(config)
 
-        config = [{'name': fs.name, 'frequent': 1, 'hourly': 0, 'daily': 1, 'weekly': 0,
-                   'monthly': 0, 'yearly': 0, 'clean': True},
-                  {'name': '{}/sub2'.format(fs), 'frequent': 0, 'hourly': 1, 'daily': 0,
-                   'weekly': 1, 'monthly': 0, 'yearly': 1, 'clean': True},
-                  {'name': '{}/sub3'.format(fs), 'frequent': 1, 'hourly': 0, 'daily': 1,
-                   'weekly': 0, 'monthly': 1, 'yearly': 0, 'clean': False},
-                  {'name': '{}/sub1/abc'.format(fs), 'frequent': 0, 'hourly': 0, 'daily': 0,
-                   'weekly': 1, 'monthly': 1, 'yearly': 1, 'clean': True},
-                  {'name': '{}/sub2/efg/hij'.format(fs), 'frequent': 0, 'hourly': 0,
-                   'daily': 0, 'weekly': 0, 'monthly': 0, 'yearly': 0, 'clean': True}]
+        config = [
+            {
+                'name': fs.name,
+                'frequent': 1,
+                'hourly': 0,
+                'daily': 1,
+                'weekly': 0,
+                'monthly': 0,
+                'yearly': 0,
+                'clean': True,
+            },
+            {
+                'name': f'{fs}/sub2',
+                'frequent': 0,
+                'hourly': 1,
+                'daily': 0,
+                'weekly': 1,
+                'monthly': 0,
+                'yearly': 1,
+                'clean': True,
+            },
+            {
+                'name': f'{fs}/sub3',
+                'frequent': 1,
+                'hourly': 0,
+                'daily': 1,
+                'weekly': 0,
+                'monthly': 1,
+                'yearly': 0,
+                'clean': False,
+            },
+            {
+                'name': f'{fs}/sub1/abc',
+                'frequent': 0,
+                'hourly': 0,
+                'daily': 0,
+                'weekly': 1,
+                'monthly': 1,
+                'yearly': 1,
+                'clean': True,
+            },
+            {
+                'name': f'{fs}/sub2/efg/hij',
+                'frequent': 0,
+                'hourly': 0,
+                'daily': 0,
+                'weekly': 0,
+                'monthly': 0,
+                'yearly': 0,
+                'clean': True,
+            },
+        ]
         clean_config(config)
 
         # Check parent filesystem
@@ -373,7 +462,7 @@ class TestSnapshot(object):
             assert len(snaps) == 1
 
 
-class TestSending(object):
+class TestSending:
     @pytest.mark.dependency()
     def test_send_full(self, zpools):
         """Checks if send_snap totally replicates a filesystem"""
@@ -383,19 +472,19 @@ class TestSending(object):
         config = [{'name': fs0.name, 'dest': [fs1.name]}]
 
         fs0.snapshot('snap0')
-        zfs.create('{:s}/sub1'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub1')
         fs0.snapshot('snap1', recursive=True)
-        zfs.create('{:s}/sub2'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub2')
         fs0.snapshot('snap2', recursive=True)
-        zfs.create('{:s}/sub3'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub3')
         fs0.snapshot('snap3', recursive=True)
         fs0.snapshot('snap4', recursive=True)
         fs0.snapshot('snap5', recursive=True)
-        zfs.create('{:s}/sub3/abc'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub3/abc')
         fs0.snapshot('snap6', recursive=True)
-        zfs.create('{:s}/sub3/abc_abc'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub3/abc_abc')
         fs0.snapshot('snap7', recursive=True)
-        zfs.create('{:s}/sub3/efg'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub3/efg')
         fs0.snapshot('snap8', recursive=True)
         fs0.snapshot('snap9', recursive=True)
         send_config(config)
@@ -403,7 +492,6 @@ class TestSending(object):
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
         assert set(fs0_children) == set(fs1_children)
-
 
     @pytest.mark.dependency(depends=['TestSending::test_send_full'])
     def test_send_incremental(self, zpools):
@@ -413,27 +501,26 @@ class TestSending(object):
         config = [{'name': fs0.name, 'dest': [fs1.name]}]
 
         fs0.snapshot('snap0', recursive=True)
-        zfs.create('{:s}/sub1'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub1')
         fs0.snapshot('snap1', recursive=True)
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
         assert set(fs0_children) == set(fs1_children)
 
-        zfs.create('{:s}/sub2'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub2')
         fs0.snapshot('snap2', recursive=True)
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
         assert set(fs0_children) == set(fs1_children)
 
-        zfs.create('{:s}/sub3'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub3')
         fs0.snapshot('snap3', recursive=True)
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
         assert set(fs0_children) == set(fs1_children)
-
 
     @pytest.mark.dependency(depends=['TestSending::test_send_incremental'])
     def test_send_delete_snapshot(self, zpools):
@@ -458,7 +545,6 @@ class TestSending(object):
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
         assert set(fs0_children) == set(fs1_children)
 
-
     @pytest.mark.dependency(depends=['TestSending::test_send_delete_snapshot'])
     def test_send_delete_sub(self, zpools):
         fs0, fs1 = zpools
@@ -474,7 +560,6 @@ class TestSending(object):
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
         assert set(fs0_children) == set(fs1_children)
-
 
     @pytest.mark.dependency(depends=['TestSending::test_send_delete_sub'])
     def test_send_delete_old(self, zpools):
@@ -502,12 +587,12 @@ class TestSending(object):
         exclude = ['*/sub1', '*/sub3/abc', '*/sub3/efg']
         config = [{'name': fs0.name, 'dest': [fs1.name], 'exclude': [exclude]}]
 
-        zfs.create('{:s}/sub1'.format(fs0.name))
-        zfs.create('{:s}/sub2'.format(fs0.name))
-        zfs.create('{:s}/sub3'.format(fs0.name))
-        zfs.create('{:s}/sub3/abc'.format(fs0.name))
-        zfs.create('{:s}/sub3/abc_abc'.format(fs0.name))
-        zfs.create('{:s}/sub3/efg'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub1')
+        zfs.create(f'{fs0.name:s}/sub2')
+        zfs.create(f'{fs0.name:s}/sub3')
+        zfs.create(f'{fs0.name:s}/sub3/abc')
+        zfs.create(f'{fs0.name:s}/sub3/abc_abc')
+        zfs.create(f'{fs0.name:s}/sub3/efg')
         fs0.snapshot('snap', recursive=True)
         send_config(config)
 
@@ -530,12 +615,12 @@ class TestSending(object):
         raw_send = ['yes']
         config = [{'name': fs0.name, 'dest': [fs1.name], 'raw_send': raw_send}]
 
-        zfs.create('{:s}/sub1'.format(fs0.name), props={'compression':'gzip'})
-        zfs.create('{:s}/sub2'.format(fs0.name), props={'compression':'lz4'})
-        zfs.create('{:s}/sub3'.format(fs0.name), props={'compression':'gzip'})
-        zfs.create('{:s}/sub3/abc'.format(fs0.name))
-        zfs.create('{:s}/sub3/abc_abc'.format(fs0.name))
-        zfs.create('{:s}/sub3/efg'.format(fs0.name))
+        zfs.create(f'{fs0.name:s}/sub1', props={'compression': 'gzip'})
+        zfs.create(f'{fs0.name:s}/sub2', props={'compression': 'lz4'})
+        zfs.create(f'{fs0.name:s}/sub3', props={'compression': 'gzip'})
+        zfs.create(f'{fs0.name:s}/sub3/abc')
+        zfs.create(f'{fs0.name:s}/sub3/abc_abc')
+        zfs.create(f'{fs0.name:s}/sub3/efg')
         fs0.snapshot('snap', recursive=True)
         send_config(config)
 

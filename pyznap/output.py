@@ -1,11 +1,11 @@
 """
-    pyznap.output
-    ~~~~~~~~~~~~~~
+pyznap.output
+~~~~~~~~~~~~~~
 
-    JSON output handler for pyznap commands.
+JSON output handler for pyznap commands.
 
-    :copyright: (c) 2018-2019 by Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2018-2019 by Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
 import json
@@ -84,7 +84,7 @@ class OutputHandler:
                 'timestamp': self.start_time.isoformat(),
                 'duration_seconds': (datetime.now() - self.start_time).total_seconds(),
                 'operations': self.operations,
-                'status': self.status
+                'status': self.status,
             }
 
             # Add stats if available
@@ -101,7 +101,7 @@ class OutputHandler:
                 'timestamp': datetime.now().isoformat(),
                 'duration_seconds': (datetime.now() - self.start_time).total_seconds(),
                 'total_operations': len(self.operations),
-                'status': self.status
+                'status': self.status,
             }
 
             if self.stats:

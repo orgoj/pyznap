@@ -1,29 +1,28 @@
 """
-    pyznap.status
-    ~~~~~~~~~~~~~~
+pyznap.status
+~~~~~~~~~~~~~~
 
-    Fix filesystem snapshots.
+Fix filesystem snapshots.
 
-    :copyright: (c) 2021 by Michael Heca.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2021 by Michael Heca.
+:license: GPLv3, see LICENSE for more details.
 """
 
 import logging
-import sys
 import re
+import sys
 from datetime import datetime
-from fnmatch import fnmatch
-from subprocess import CalledProcessError
-from .utils import parse_name
-import pyznap.pyzfs as zfs
-from .process import DatasetBusyError, DatasetNotFoundError
 
-FORMATS={
-    '@zfs-auto-snap': 'zfs-auto-snap_(?P<type>[a-z]+)-(?P<year>\d{2,4})-(?P<month>\d{2})-(?P<day>\d{2})-(?P<hour>\d{2})(?P<minute>\d{2})',
-    '@zfsnap': '(?P<year>\d{2,4})-(?P<month>\d{2})-(?P<day>\d{2})_(?P<hour>\d{2}).(?P<minute>\d{2}).(?P<second>\d{2})--(?P<type>\d+[a-z])',
+import pyznap.pyzfs as zfs
+
+from .process import DatasetNotFoundError
+
+FORMATS = {
+    '@zfs-auto-snap': r'zfs-auto-snap_(?P<type>[a-z]+)-(?P<year>\d{2,4})-(?P<month>\d{2})-(?P<day>\d{2})-(?P<hour>\d{2})(?P<minute>\d{2})',
+    '@zfsnap': r'(?P<year>\d{2,4})-(?P<month>\d{2})-(?P<day>\d{2})_(?P<hour>\d{2}).(?P<minute>\d{2}).(?P<second>\d{2})--(?P<type>\d+[a-z])',
 }
 
-MAPS={
+MAPS = {
     '@zfsnap': {
         '3d': 'frequent',
         '4d': 'frequent',
@@ -52,15 +51,18 @@ MAPS={
     }
 }
 
+
 def re_get_group(r, group, default=0):
     try:
         result = r.group(group)
     except IndexError:
-        result =  default
+        result = default
     return result
+
 
 def re_get_group_int(r, group, default=0):
     return int(re_get_group(r, group, default=default))
+
 
 def fix_snapshots(filesystems, format=None, type=None, type_map=None, recurse=False):
     """Fix snapshots name
@@ -75,27 +77,27 @@ def fix_snapshots(filesystems, format=None, type=None, type_map=None, recurse=Fa
 
     if format.startswith('@'):
         if not type_map and format in MAPS:
-            type_map=MAPS[format]
+            type_map = MAPS[format]
         if format in FORMATS:
-            format=FORMATS[format]
+            format = FORMATS[format]
         else:
-            logger.error('Unknown format {}.'.format(format))
+            logger.error(f'Unknown format {format}.')
             sys.exit(1)
 
-    logger.debug('FORMAT: '+str(format))
-    logger.debug('MAP: '+str(type_map))
+    logger.debug('FORMAT: ' + str(format))
+    logger.debug('MAP: ' + str(type_map))
 
     rp = re.compile(format)
     now = datetime.now()
-    cur_century = int(now.year/100)*100
+    cur_century = int(now.year / 100) * 100
 
     # for all specified filesystems
     for fsname in filesystems:
-        logger.info('Checking snapshots on {}...'.format(fsname))
+        logger.info(f'Checking snapshots on {fsname}...')
         try:
             parent = zfs.open(fsname)
         except DatasetNotFoundError:
-            logger.error('Filesystem not exists {}'.format(fsname))
+            logger.error(f'Filesystem not exists {fsname}')
             continue
 
         if recurse:
@@ -106,15 +108,14 @@ def fix_snapshots(filesystems, format=None, type=None, type_map=None, recurse=Fa
             fstree = [parent]
 
         for filesystem in fstree:
-
-            logger.info('Fixing {}...'.format(filesystem.name))
+            logger.info(f'Fixing {filesystem.name}...')
             snapshots = filesystem.snapshots()
             for snapshot in snapshots:
                 snapname = snapshot.snapname()
                 try:
-                    r=rp.match(snapname)
-                except:
-                    r=False
+                    r = rp.match(snapname)
+                except Exception:
+                    r = False
                 if r:
                     # guess year
                     year = re_get_group_int(r, 'year', default=now.year)
@@ -128,14 +129,20 @@ def fix_snapshots(filesystems, format=None, type=None, type_map=None, recurse=Fa
                     if not snaptype and type:
                         snaptype = type
                     if not snaptype:
-                        logger.error('Unknown snap type {} for snapshot {}'.format(snaptype, snapname))
+                        logger.error(f'Unknown snap type {snaptype} for snapshot {snapname}')
                         continue
-                    new_snapname = 'pyznap_'+datetime(year,
-                        re_get_group_int(r, 'month', default=now.month),
-                        re_get_group_int(r, 'day', default=now.day),
-                        hour=re_get_group_int(r, 'hour', default=now.hour),
-                        minute=re_get_group_int(r, 'minute', default=now.minute),
-                        second=re_get_group_int(r, 'second', default=now.second)
-                        ).strftime('%Y-%m-%d_%H:%M:%S')+'_'+snaptype
-                    logger.debug('Renaming {} -> {}'.format(snapname, new_snapname))
-                    snapshot.rename(snapshot.fsname()+'@'+new_snapname)
+                    new_snapname = (
+                        'pyznap_'
+                        + datetime(
+                            year,
+                            re_get_group_int(r, 'month', default=now.month),
+                            re_get_group_int(r, 'day', default=now.day),
+                            hour=re_get_group_int(r, 'hour', default=now.hour),
+                            minute=re_get_group_int(r, 'minute', default=now.minute),
+                            second=re_get_group_int(r, 'second', default=now.second),
+                        ).strftime('%Y-%m-%d_%H:%M:%S')
+                        + '_'
+                        + snaptype
+                    )
+                    logger.debug(f'Renaming {snapname} -> {new_snapname}')
+                    snapshot.rename(snapshot.fsname() + '@' + new_snapname)

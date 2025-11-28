@@ -5,24 +5,23 @@ Unit tests for pyznap.status_helpers module.
 Tests helper classes and utilities for status operations.
 """
 
-import pytest
-from unittest.mock import Mock
-from datetime import datetime
 import sys
+from unittest.mock import Mock
+
+import pytest
 
 sys.path.insert(0, '/home/user/pyznap')
 
 from pyznap.status_helpers import (
-    FilesystemOperations,
     DestStatus,
+    FilesystemOperations,
     FilesystemStatus,
     SnapshotCategorizer,
-    determine_operations,
-    should_skip_filesystem,
-    extract_snapshot_info,
-    check_snapshot_counts,
     bytes_fmt,
-    SNAPSHOT_TYPES
+    check_snapshot_counts,
+    determine_operations,
+    extract_snapshot_info,
+    should_skip_filesystem,
 )
 from tests.fixtures.mock_zfs import create_mock_snapshot
 
@@ -74,11 +73,7 @@ class TestDestStatus:
 
     def test_creation(self):
         """Test creating DestStatus."""
-        dest = DestStatus(
-            dest_type='ssh',
-            host='backup.example.com',
-            name='backup/data'
-        )
+        dest = DestStatus(dest_type='ssh', host='backup.example.com', name='backup/data')
 
         assert dest.type == 'ssh'
         assert dest.host == 'backup.example.com'
@@ -88,11 +83,7 @@ class TestDestStatus:
 
     def test_to_dict_basic(self):
         """Test serialization to dict."""
-        dest = DestStatus(
-            dest_type='local',
-            host=None,
-            name='backup/data'
-        )
+        dest = DestStatus(dest_type='local', host=None, name='backup/data')
         dest.snapshot_count = 10
         dest.common_snapshots = ['snap1', 'snap2', 'snap3']
         dest.first_snapshot = 'snap1'
@@ -127,11 +118,7 @@ class TestFilesystemStatus:
 
     def test_creation(self):
         """Test creating FilesystemStatus."""
-        status = FilesystemStatus(
-            hostname='myhost',
-            name='tank/data',
-            conf_name='tank/data'
-        )
+        status = FilesystemStatus(hostname='myhost', name='tank/data', conf_name='tank/data')
 
         assert status.hostname == 'myhost'
         assert status.name == 'tank/data'
@@ -142,11 +129,7 @@ class TestFilesystemStatus:
 
     def test_to_dict_basic(self):
         """Test serialization to dict."""
-        status = FilesystemStatus(
-            hostname='myhost',
-            name='tank/data',
-            conf_name='tank/data'
-        )
+        status = FilesystemStatus(hostname='myhost', name='tank/data', conf_name='tank/data')
         status.operations = FilesystemOperations(snap=True, clean=True, send=False)
         status.has_snapshots = True
         status.all_snapshot_count = 10
@@ -228,7 +211,7 @@ class TestSnapshotCategorizer:
             'weekly': [Mock()],
             'monthly': [],
             'yearly': [],
-            'frequent': []
+            'frequent': [],
         }
 
         counts = SnapshotCategorizer.count_by_type(categorized)
@@ -250,7 +233,7 @@ class TestDetermineOperations:
             'clean': True,
             'dest': ['backup/data'],
             'snap_exclude_property': None,
-            'send_exclude_property': None
+            'send_exclude_property': None,
         }
 
         ops = determine_operations(filesystem, conf, main_fs=True)
@@ -271,7 +254,7 @@ class TestDetermineOperations:
             'clean': True,
             'dest': [],
             'snap_exclude_property': 'com.sun:auto-snapshot',
-            'send_exclude_property': None
+            'send_exclude_property': None,
         }
 
         ops = determine_operations(filesystem, conf, main_fs=False)
@@ -291,7 +274,7 @@ class TestDetermineOperations:
             'clean': True,
             'dest': [],
             'snap_exclude_property': 'com.sun:auto-snapshot',
-            'send_exclude_property': None
+            'send_exclude_property': None,
         }
 
         ops = determine_operations(filesystem, conf, main_fs=True)
@@ -310,7 +293,7 @@ class TestDetermineOperations:
             'clean': False,
             'dest': ['backup/data'],
             'snap_exclude_property': None,
-            'send_exclude_property': 'pyznap:exclude'
+            'send_exclude_property': 'pyznap:exclude',
         }
 
         ops = determine_operations(filesystem, conf, main_fs=False)
@@ -345,7 +328,7 @@ class TestExtractSnapshotInfo:
         snap.getprops.return_value = {
             'creation': ('1705329600', 'default'),  # 2024-01-15 12:00:00 UTC
             'referenced': ('1000000', 'default'),
-            'logicalreferenced': ('1500000', 'default')
+            'logicalreferenced': ('1500000', 'default'),
         }
 
         info = extract_snapshot_info(snap)
@@ -377,13 +360,9 @@ class TestCheckSnapshotCounts:
             'weekly': [],
             'monthly': [],
             'yearly': [],
-            'frequent': []
+            'frequent': [],
         }
-        policy = {
-            'hourly': 2,
-            'daily': 1,
-            'weekly': 0
-        }
+        policy = {'hourly': 2, 'daily': 1, 'weekly': 0}
 
         has_missing, has_extra = check_snapshot_counts(categorized, policy)
 
@@ -398,12 +377,9 @@ class TestCheckSnapshotCounts:
             'weekly': [],
             'monthly': [],
             'yearly': [],
-            'frequent': []
+            'frequent': [],
         }
-        policy = {
-            'hourly': 3,
-            'daily': 2
-        }
+        policy = {'hourly': 3, 'daily': 2}
 
         has_missing, has_extra = check_snapshot_counts(categorized, policy)
 
@@ -417,11 +393,9 @@ class TestCheckSnapshotCounts:
             'weekly': [],
             'monthly': [],
             'yearly': [],
-            'frequent': []
+            'frequent': [],
         }
-        policy = {
-            'hourly': 2
-        }
+        policy = {'hourly': 2}
 
         has_missing, has_extra = check_snapshot_counts(categorized, policy)
 

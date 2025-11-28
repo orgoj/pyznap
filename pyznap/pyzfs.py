@@ -1,35 +1,39 @@
 """
-    pyznap.pyzfs
-    ~~~~~~~~~~~~~~
+pyznap.pyzfs
+~~~~~~~~~~~~~~
 
-    Python ZFS bindings, forked from https://bitbucket.org/stevedrake/weir/.
+Python ZFS bindings, forked from https://bitbucket.org/stevedrake/weir/.
 
-    :copyright: (c) 2015-2019 by Stephen Drake, Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2015-2019 by Stephen Drake, Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
-import sys
-import os
 import logging
+import os
 import subprocess as sp
+import sys
 from fnmatch import fnmatch
 from shlex import quote
-from .process import check_output, check_output_dry, set_dry_run, DatasetNotFoundError, DatasetBusyError
-from .utils import exists, bytes_fmt, parse_name
-from .ssh import SSH, SSHException
 
+from .process import DatasetBusyError, DatasetNotFoundError, check_output, check_output_dry
+from .ssh import SSH, SSHException
+from .utils import bytes_fmt, exists, parse_name
 
 SHELL = ['sh', '-c']
 
 # Use mbuffer if installed on the system
 if exists('mbuffer'):
-    MBUFFER = lambda mem: ['mbuffer', '-q', '-s', '128K', '-m', '{:d}M'.format(mem)]
+
+    def MBUFFER(mem):
+        return ['mbuffer', '-q', '-s', '128K', '-m', f'{mem:d}M']
 else:
     MBUFFER = None
 
 # Use pv if installed on the system
 if 'PYZNAP_DISABLE_PV' not in os.environ and exists('pv'):
-    PV = lambda size: ['pv', '-f', '-w', '100', '-s', str(size)]
+
+    def PV(size):
+        return ['pv', '-f', '-w', '100', '-s', str(size)]
 else:
     PV = None
 
@@ -47,9 +51,9 @@ class STATS:
     @classmethod
     def log(cls):
         logger = logging.getLogger(__name__)
-        logger.info('STATS: '+str(cls.data))
+        logger.info('STATS: ' + str(cls.data))
         if 'send_size' in cls.data:
-            logger.info('SEND_SIZE: '+bytes_fmt(cls.data['send_size']))
+            logger.info('SEND_SIZE: ' + bytes_fmt(cls.data['send_size']))
 
     @classmethod
     def to_dict(cls):
@@ -60,9 +64,10 @@ class STATS:
         return result
 
 
-
-def _find(path=None, ssh=None, max_depth=None, types=[]):
+def _find(path=None, ssh=None, max_depth=None, types=None):
     """Get filesystems and snapshots names for a given path"""
+    if types is None:
+        types = []
     cmd = ['zfs', 'list']
 
     cmd.append('-H')
@@ -88,9 +93,11 @@ def _find(path=None, ssh=None, max_depth=None, types=[]):
     return check_output(cmd, ssh=ssh)
 
 
-def find(path=None, ssh=None, max_depth=None, types=[]):
+def find(path=None, ssh=None, max_depth=None, types=None):
     """Lists filesystems and snapshots for a given path"""
 
+    if types is None:
+        types = []
     out = _find(path=path, ssh=ssh, max_depth=max_depth, types=types)
 
     return [open(name, ssh=ssh, type=type) for name, type in out]
@@ -106,53 +113,54 @@ def find_exclude(conf, config, ssh=None, matching=None):
     try:
         _type, fsname, user, host, port = parse_name(name)
     except ValueError as err:
-        logger.error('Could not parse {:s}: {}...'.format(name, err))
+        logger.error(f'Could not parse {name:s}: {err}...')
         raise
 
     if _type == 'ssh':
-        if ssh == None:
+        if ssh is None:
             try:
                 compress = conf['compress'].pop(0) if conf.get('compress', None) else 'lzop'
                 ssh = SSH(user, host, port=port, key=conf.get('key'), compress=compress)
             except (FileNotFoundError, SSHException) as err:
-                logger.error('SSH error {:s}: {}...'.format(name, err))
+                logger.error(f'SSH error {name:s}: {err}...')
                 raise
-        name_log = '{:s}@{:s}:{:s}'.format(user, host, fsname)
     else:
         ssh = None
-        name_log = fsname
 
-    max_deph = conf['max_depth'] if ( 'max_depth' in conf and isinstance(conf['max_depth'], int)
-        and conf['max_depth'] >= 0 ) else None
+    max_deph = (
+        conf['max_depth']
+        if ('max_depth' in conf and isinstance(conf['max_depth'], int) and conf['max_depth'] >= 0)
+        else None
+    )
 
     out = _find(path=fsname, ssh=ssh, types=['filesystem', 'volume'], max_depth=max_deph)
 
     # get subconfigs names with / for conf
-    sub_config_names = tuple([ c['name']+'/' for c in config if '_parent' in c and c['_parent']==name])
+    sub_config_names = tuple([c['name'] + '/' for c in config if '_parent' in c and c['_parent'] == name])
 
     if ssh:
-        prefix = ':'.join(name.split(':')[:-1])+':'
+        prefix = ':'.join(name.split(':')[:-1]) + ':'
     else:
         prefix = ''
 
     # filter by match if specified
     if matching is not None:
-        out = [
-            [ name, type ]
-            for name, type in out
-                if fnmatch(prefix+name, matching)
-        ]
+        out = [[name, type] for name, type in out if fnmatch(prefix + name, matching)]
 
     # exclude filesystem with own configuration
     return [
-        open(name, ssh=ssh, type=type)
-            for name, type in out
-                if not (prefix+name+'/').startswith(sub_config_names)
-        ]
+        open(name, ssh=ssh, type=type) for name, type in out if not (prefix + name + '/').startswith(sub_config_names)
+    ]
 
 
-def findprops(path=None, ssh=None, max_depth=None, props=['all'], sources=[], types=[]):
+def findprops(path=None, ssh=None, max_depth=None, props=None, sources=None, types=None):
     """Lists all properties of a given filesystem"""
+    if types is None:
+        types = []
+    if sources is None:
+        sources = []
+    if props is None:
+        props = ['all']
     cmd = ['zfs', 'get']
 
     cmd.append('-H')
@@ -181,7 +189,7 @@ def findprops(path=None, ssh=None, max_depth=None, props=['all'], sources=[], ty
 
     out = check_output(cmd, ssh=ssh)
 
-    names = set(map(lambda x: x[0], out))
+    names = {x[0] for x in out}
 
     # return [dict(name=n, property=p, value=v, source=s) for n, p, v, s in out]
     return {name: {i[1]: (i[2], i[3]) for i in out if i[0] == name} for name in names}
@@ -205,20 +213,23 @@ def open(name, ssh=None, type=None):
     if type == 'snapshot':
         return ZFSSnapshot(name, ssh)
 
-    raise ValueError('invalid dataset type %s' % type)
+    raise ValueError(f'invalid dataset type {type}')
 
 
 def roots(ssh=None):
     return find(ssh=ssh, max_depth=0)
 
+
 # note: force means create missing parent filesystems
-def create(name, ssh=None, type='filesystem', props={}, force=False):
+def create(name, ssh=None, type='filesystem', props=None, force=False):
+    if props is None:
+        props = {}
     cmd = ['zfs', 'create']
 
     if type == 'volume':
         raise NotImplementedError()
     elif type != 'filesystem':
-        raise ValueError('invalid type %s' % type)
+        raise ValueError(f'invalid type {type}')
 
     if force:
         cmd.append('-p')
@@ -235,8 +246,19 @@ def create(name, ssh=None, type='filesystem', props={}, force=False):
     return ZFSFilesystem(name, ssh=ssh)
 
 
-def receive(name, stdin, ssh=None, ssh_source=None, append_name=False, append_path=False,
-            force=False, nomount=False, stream_size=0, raw=False, resume=False):
+def receive(
+    name,
+    stdin,
+    ssh=None,
+    ssh_source=None,
+    append_name=False,
+    append_path=False,
+    force=False,
+    nomount=False,
+    stream_size=0,
+    raw=False,
+    resume=False,
+):
     """Returns Popen instance for zfs receive"""
     logger = logging.getLogger(__name__)
 
@@ -276,35 +298,35 @@ def receive(name, stdin, ssh=None, ssh_source=None, append_name=False, append_pa
     if resume:
         cmd.append('-s')
 
-    cmd.append(quote(name)) # use shlex to quote the name
+    cmd.append(quote(name))  # use shlex to quote the name
 
     # add additional commands
-    if decompress and not raw: # disable compression for raw send
+    if decompress and not raw:  # disable compression for raw send
         logger.debug("Using compression on dest: '{:s}'...".format(' '.join(decompress)))
         cmd = decompress + ['|'] + cmd
     # only use mbuffer at recv if send is over ssh
-    if (ssh_source or ssh) and mbuffer and stream_size >= 1024**2: # don't use mbuffer if stream size is too small
+    if (ssh_source or ssh) and mbuffer and stream_size >= 1024**2:  # don't use mbuffer if stream size is too small
         logger.debug("Using mbuffer on dest: '{:s}'...".format(' '.join(mbuffer(mbuff_size))))
         cmd = mbuffer(mbuff_size) + ['|'] + cmd
 
     # execute command with shell (sh or ssh)
     cmd = shell + [' '.join(cmd)]
 
-    logger.log(8, 'RUN: {}'.format(cmd))
-    return sp.Popen(cmd, stdin=stdin, stderr=sp.PIPE) # zfs receive process
+    logger.log(8, f'RUN: {cmd}')
+    return sp.Popen(cmd, stdin=stdin, stderr=sp.PIPE)  # zfs receive process
 
 
-class ZFSDataset(object):
+class ZFSDataset:
     def __init__(self, name, ssh=None):
         self.name = name
         self.ssh = ssh
 
     def __str__(self):
-        return '{:s}@{:s}:{:s}'.format(self.ssh.user, self.ssh.host, self.name) if self.ssh else self.name
+        return f'{self.ssh.user:s}@{self.ssh.host:s}:{self.name:s}' if self.ssh else self.name
 
     def __repr__(self):
         name = self.__str__()
-        return '{0}({1!r})'.format(self.__class__.__name__, name)
+        return f'{self.__class__.__name__}({name!r})'
 
     def parent(self):
         parent_name, _, _ = self.name.rpartition('/')
@@ -341,10 +363,12 @@ class ZFSDataset(object):
 
         cmd.append(self.name)
 
-        STATS.add('zfs_destroy/'+self.__class__.__name__)
+        STATS.add('zfs_destroy/' + self.__class__.__name__)
         check_output_dry(cmd, ssh=self.ssh)
 
-    def snapshot(self, snapname, recursive=False, props={}):
+    def snapshot(self, snapname, recursive=False, props=None):
+        if props is None:
+            props = {}
         cmd = ['zfs', 'snapshot']
 
         if recursive:
@@ -451,8 +475,10 @@ class ZFSDataset(object):
     def unallow(self, *args, **kwargs):
         raise NotImplementedError()
 
+
 class ZFSVolume(ZFSDataset):
     pass
+
 
 class ZFSFilesystem(ZFSDataset):
     def upgrade(self, *args, **kwargs):
@@ -463,6 +489,7 @@ class ZFSFilesystem(ZFSDataset):
 
     def unmount(self, *args, **kwargs):
         raise NotImplementedError()
+
 
 class ZFSSnapshot(ZFSDataset):
     def snapname(self):
@@ -478,11 +505,20 @@ class ZFSSnapshot(ZFSDataset):
         return open(name=parent_path, ssh=self.ssh)
 
     # note: force means create missing parent filesystems
-    def clone(self, name, props={}, force=False):
+    def clone(self, name, props=None, force=False):
         raise NotImplementedError()
 
-    def send(self, ssh_dest=None, base=None, intermediates=False, replicate=False,
-             properties=False, deduplicate=False, raw=False, resume_token=None):
+    def send(
+        self,
+        ssh_dest=None,
+        base=None,
+        intermediates=False,
+        replicate=False,
+        properties=False,
+        deduplicate=False,
+        raw=False,
+        resume_token=None,
+    ):
         logger = logging.getLogger(__name__)
 
         # get the size of the snapshot to send
@@ -519,7 +555,7 @@ class ZFSSnapshot(ZFSDataset):
         if resume_token is not None:
             cmd.append('-t')
             cmd.append(resume_token)
-        else: # normal send
+        else:  # normal send
             if replicate:
                 cmd.append('-R')
             if properties:
@@ -527,7 +563,7 @@ class ZFSSnapshot(ZFSDataset):
             if deduplicate:
                 cmd.append('-D')
             if raw:
-                logger.debug("Using raw zfs send...")
+                logger.debug('Using raw zfs send...')
                 cmd.append('-w')
 
             if base is not None:
@@ -535,31 +571,31 @@ class ZFSSnapshot(ZFSDataset):
                     cmd.append('-I')
                 else:
                     cmd.append('-i')
-                cmd.append(quote(base.name)) # use shlex to quote the name
+                cmd.append(quote(base.name))  # use shlex to quote the name
 
-            cmd.append(quote(self.name)) # use shlex to quote the name
+            cmd.append(quote(self.name))  # use shlex to quote the name
 
         # add additional commands
-        if mbuffer and stream_size >= 1024**2: # don't use mbuffer if stream size is too small
+        if mbuffer and stream_size >= 1024**2:  # don't use mbuffer if stream size is too small
             logger.debug("Using mbuffer on source: '{:s}'...".format(' '.join(mbuffer(mbuff_size))))
             cmd += ['|'] + mbuffer(mbuff_size)
 
-        if pv and stream_size >= 1024**2: # don't use pv if stream size is too small
+        if pv and stream_size >= 1024**2:  # don't use pv if stream size is too small
             pv_cmd = pv(stream_size)
             if not sys.stdout.isatty():
-                pv_cmd += ['-i', '60'] # if stdout is redirected, only update pv every 60s
+                pv_cmd += ['-i', '60']  # if stdout is redirected, only update pv every 60s
             logger.debug("Using pv on source: '{:s}'...".format(' '.join(pv_cmd)))
             cmd += ['|'] + pv_cmd
 
-        if compress and not raw: # disable compression for raw send
+        if compress and not raw:  # disable compression for raw send
             logger.debug("Using compression on source: '{:s}'...".format(' '.join(compress)))
             cmd += ['|'] + compress
 
         # execute command with shell (sh or ssh)
         cmd = shell + [' '.join(cmd)]
 
-        logger.log(8, 'RUN: {}'.format(cmd))
-        return sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE) # return zfs send process
+        logger.log(8, f'RUN: {cmd}')
+        return sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # return zfs send process
 
     def stream_size(self, base=None, raw=False, resume_token=None):
         cache_key = (str(base), raw, resume_token)

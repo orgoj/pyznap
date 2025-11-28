@@ -5,7 +5,7 @@ Provides mock implementations of SSH connections and operations
 without requiring actual SSH servers.
 """
 
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 
 class MockSSHConnection:
@@ -62,7 +62,7 @@ class MockSSHConnection:
 
     def __repr__(self):
         status = 'closed' if self._closed else 'open'
-        return f"MockSSHConnection({self.user}@{self.host}:{self.port}, {status})"
+        return f'MockSSHConnection({self.user}@{self.host}:{self.port}, {status})'
 
     def __enter__(self):
         """Context manager entry."""

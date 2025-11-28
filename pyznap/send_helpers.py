@@ -6,9 +6,8 @@ to make send operations more maintainable and testable.
 """
 
 import logging
-from typing import Optional, List, Union
 from dataclasses import dataclass
-
+from typing import List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +24,7 @@ class ParsedName:
         host: SSH hostname (None for local)
         port: SSH port (None for local)
     """
+
     type: str
     name: str
     user: Optional[str] = None
@@ -35,7 +35,7 @@ class ParsedName:
     def display_name(self) -> str:
         """Get human-readable display name."""
         if self.type == 'ssh':
-            return f"{self.user}@{self.host}:{self.name}"
+            return f'{self.user}@{self.host}:{self.name}'
         return self.name
 
     @property
@@ -51,6 +51,7 @@ class DestConfig:
 
     Contains all parameters needed to send to one destination.
     """
+
     name: str
     exclude: List[str]
     raw: bool
@@ -78,15 +79,16 @@ class SourceContext:
 
     Manages source filesystem and its SSH connection if remote.
     """
+
     name: str
     ssh: Optional[object] = None  # SSH object
-    display_name: str = ""
+    display_name: str = ''
 
     def __post_init__(self):
         """Initialize display name if not provided."""
         if not self.display_name:
             if self.ssh:
-                self.display_name = f"{self.ssh.user}@{self.ssh.host}:{self.name}"
+                self.display_name = f'{self.ssh.user}@{self.ssh.host}:{self.name}'
             else:
                 self.display_name = self.name
 
@@ -108,15 +110,16 @@ class DestContext:
 
     Manages destination filesystem and its SSH connection if remote.
     """
+
     name: str
     ssh: Optional[object] = None  # SSH object
-    display_name: str = ""
+    display_name: str = ''
 
     def __post_init__(self):
         """Initialize display name if not provided."""
         if not self.display_name:
             if self.ssh:
-                self.display_name = f"{self.ssh.user}@{self.ssh.host}:{self.name}"
+                self.display_name = f'{self.ssh.user}@{self.ssh.host}:{self.name}'
             else:
                 self.display_name = self.name
 
@@ -142,8 +145,7 @@ class SSHManager:
     _connections = {}
 
     @classmethod
-    def get_or_create(cls, user: str, host: str, port: int = 22,
-                     key: Optional[str] = None, compress: str = 'lzop'):
+    def get_or_create(cls, user: str, host: str, port: int = 22, key: Optional[str] = None, compress: str = 'lzop'):
         """
         Get existing SSH connection or create new one.
 
@@ -157,17 +159,18 @@ class SSHManager:
         Returns:
             SSH connection object
         """
-        from .ssh import SSH
         from paramiko.ssh_exception import SSHException
 
-        conn_id = f"{user}@{host}:{port}"
+        from .ssh import SSH
+
+        conn_id = f'{user}@{host}:{port}'
 
         if conn_id not in cls._connections:
-            logger.debug(f"Creating new SSH connection: {conn_id}")
+            logger.debug(f'Creating new SSH connection: {conn_id}')
             try:
                 cls._connections[conn_id] = SSH(user, host, port=port, key=key, compress=compress)
             except (FileNotFoundError, SSHException) as err:
-                logger.error(f"Failed to create SSH connection to {conn_id}: {err}")
+                logger.error(f'Failed to create SSH connection to {conn_id}: {err}')
                 raise
 
         return cls._connections[conn_id]
@@ -176,16 +179,16 @@ class SSHManager:
     def close_all(cls):
         """Close all managed SSH connections."""
         for conn_id, ssh in cls._connections.items():
-            logger.debug(f"Closing SSH connection: {conn_id}")
+            logger.debug(f'Closing SSH connection: {conn_id}')
             ssh.close()
         cls._connections.clear()
 
     @classmethod
     def close(cls, user: str, host: str, port: int = 22):
         """Close specific SSH connection."""
-        conn_id = f"{user}@{host}:{port}"
+        conn_id = f'{user}@{host}:{port}'
         if conn_id in cls._connections:
-            logger.debug(f"Closing SSH connection: {conn_id}")
+            logger.debug(f'Closing SSH connection: {conn_id}')
             cls._connections[conn_id].close()
             del cls._connections[conn_id]
 

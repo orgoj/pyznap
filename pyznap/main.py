@@ -1,48 +1,47 @@
 #!/usr/bin/env python
 """
-    pyznap.main
-    ~~~~~~~~~~~~~~
+pyznap.main
+~~~~~~~~~~~~~~
 
-    ZFS snapshot tool written in python.
+ZFS snapshot tool written in python.
 
-    :copyright: (c) 2018-2019 by Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2018-2019 by Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
-import sys
-import os
 import logging
-from errorhandler import ErrorHandler
-from logging.config import fileConfig
+import os
+import sys
 from argparse import ArgumentParser
-from datetime import datetime
-from .utils import read_config, create_config
+
+from errorhandler import ErrorHandler
+
+import pyznap.pyzfs as zfs
+
+from . import __version__
 from .clean import clean_config
-from .take import take_config
+from .fix import fix_snapshots
+from .output import OutputHandler
+from .process import set_dry_run
 from .send import send_config
 from .status import status_config
-from .fix import fix_snapshots
-from .process import set_dry_run
-from .output import OutputHandler
-import pyznap.pyzfs as zfs
-from . import __version__
-from .verification import verify_remote_snapshots, Status
-
+from .take import take_config
+from .utils import create_config, read_config
+from .verification import Status, verify_remote_snapshots
 
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
 CONFIG_DIR = '/etc/pyznap/'
 
+
 def check_pid(pidfile_path):
-    from sys import argv
-    from os import path, unlink, getpid
     import psutil
 
     if os.path.exists(pidfile_path):
         # pidfile exists... inspect it for freshness.
         try:
-            pidno = int(open(pidfile_path, "r").read().strip())
+            pidno = int(open(pidfile_path).read().strip())
             try:
-                proc = psutil.Process(pidno)
+                psutil.Process(pidno)
                 return False
             except psutil.NoSuchProcess:
                 # pidfile's stale.
@@ -51,7 +50,6 @@ def check_pid(pidfile_path):
             # what?
             os.unlink(pidfile_path)
     return True
-
 
 
 def _main():
@@ -64,126 +62,168 @@ def _main():
     """
 
     settings = {
-        "matching": None,
+        'matching': None,
     }
 
-    parser = ArgumentParser(prog='pyznap', description='ZFS snapshot tool written in python (version='+__version__+')')
-    parser.add_argument('-q', '--quiet', action="store_true",
-                        dest="quiet", help='quiet logging, only errors shown (WARNING)')
-    parser.add_argument('-v', '--verbose', action="store_true",
-                        dest="verbose", help='print more verbose output (DEBUG)')
-    parser.add_argument('-t', '--trace', action="store_true",
-                        dest="trace", help='print run tracing output (TRACE)')
-    parser.add_argument('-n', '--dry-run', action="store_true",
-                        dest="dry_run", help='only test run, no action taken')
-    parser.add_argument('--syslog', action="store_true",
-                        dest="syslog", help='add logging to syslog (INFO)')
-    parser.add_argument('--logconfig', action="store_true",
-                        dest="logconfig", help='add config name to log')
-    parser.add_argument('--config', action="store",
-                        dest="config", help='path to config file')
-    parser.add_argument('-m', '--matching', action="store",
-                        dest="matching", help='only process matching filesystems')
-    parser.add_argument('--pidfile', action="store",
-                        dest="pidfile", default=None, help='path to pid file')
-    parser.add_argument('--output-format', action="store", default='log',
-                        choices=['log', 'json', 'jsonl'],
-                        dest="output_format", help='output format for results (json, jsonl, or log)')
-    parser.add_argument('-V', '--version', action="store_true",
-                        dest="version", help='print version number')
+    parser = ArgumentParser(
+        prog='pyznap', description='ZFS snapshot tool written in python (version=' + __version__ + ')'
+    )
+    parser.add_argument(
+        '-q', '--quiet', action='store_true', dest='quiet', help='quiet logging, only errors shown (WARNING)'
+    )
+    parser.add_argument(
+        '-v', '--verbose', action='store_true', dest='verbose', help='print more verbose output (DEBUG)'
+    )
+    parser.add_argument('-t', '--trace', action='store_true', dest='trace', help='print run tracing output (TRACE)')
+    parser.add_argument('-n', '--dry-run', action='store_true', dest='dry_run', help='only test run, no action taken')
+    parser.add_argument('--syslog', action='store_true', dest='syslog', help='add logging to syslog (INFO)')
+    parser.add_argument('--logconfig', action='store_true', dest='logconfig', help='add config name to log')
+    parser.add_argument('--config', action='store', dest='config', help='path to config file')
+    parser.add_argument('-m', '--matching', action='store', dest='matching', help='only process matching filesystems')
+    parser.add_argument('--pidfile', action='store', dest='pidfile', default=None, help='path to pid file')
+    parser.add_argument(
+        '--output-format',
+        action='store',
+        default='log',
+        choices=['log', 'json', 'jsonl'],
+        dest='output_format',
+        help='output format for results (json, jsonl, or log)',
+    )
+    parser.add_argument('-V', '--version', action='store_true', dest='version', help='print version number')
 
     subparsers = parser.add_subparsers(dest='command')
 
     parser_setup = subparsers.add_parser('setup', help='initial setup')
-    parser_setup.add_argument('-p', '--path', action='store',
-                              dest='path', help='pyznap config dir. default is {:s}'.format(CONFIG_DIR))
+    parser_setup.add_argument(
+        '-p', '--path', action='store', dest='path', help=f'pyznap config dir. default is {CONFIG_DIR:s}'
+    )
 
     parser_snap = subparsers.add_parser('snap', help='zfs snapshot tools')
-    parser_snap.add_argument('--take', action="store_true",
-                             help='take snapshots according to config file')
-    parser_snap.add_argument('--clean', action="store_true",
-                             help='clean old snapshots according to config file')
-    parser_snap.add_argument('--full', action="store_true",
-                             help='take snapshots then clean old according to config file')
+    parser_snap.add_argument('--take', action='store_true', help='take snapshots according to config file')
+    parser_snap.add_argument('--clean', action='store_true', help='clean old snapshots according to config file')
+    parser_snap.add_argument(
+        '--full', action='store_true', help='take snapshots then clean old according to config file'
+    )
 
     parser_send = subparsers.add_parser('send', help='zfs send/receive tools')
-    parser_send.add_argument('-s', '--source', action="store",
-                             dest='source', help='source filesystem')
-    parser_send.add_argument('-d', '--dest', action="store",
-                             dest='dest', help='destination filesystem')
-    parser_send.add_argument('-i', '--key', action="store",
-                             dest='key', help='ssh key if only source or dest is remote')
-    parser_send.add_argument('-j', '--source-key', action="store",
-                             dest='source_key', help='ssh key for source if both are remote')
-    parser_send.add_argument('-k', '--dest-key', action="store",
-                             dest='dest_key', help='ssh key for dest if both are remote')
-    parser_send.add_argument('-c', '--compress', action="store",
-                             dest='compress', help='compression to use for ssh transfer. default is lzop')
-    parser_send.add_argument('-e', '--exclude', nargs = '+',
-                             dest='exclude', help='datasets to exclude')
-    parser_send.add_argument('-w', '--raw', action="store_true",
-                             dest='raw', help='raw zfs send. default is false')
-    parser_send.add_argument('-r', '--resume', action="store_true",
-                             dest='resume', help='resumable send. default is false')
-    parser_send.add_argument('-l', '--last', action="store",
-                             dest='send_last_snapshot', help='stat sending from last snapshot containing string')
-    parser_send.add_argument('--dest-auto-create', action="store_true",
-                             dest='dest_auto_create',
-                             help='create destination if it does not exist. default is false')
-    parser_send.add_argument('--retries', action="store", type=int,
-                             dest='retries', default=0,
-                             help='number of retries on error. default is 0')
-    parser_send.add_argument('--retry-interval', action="store", type=int,
-                             dest='retry_interval', default=10,
-                             help='interval in seconds between retries. default is 10')
-    parser_send.add_argument('--max-depth', action="store", type=int,
-                             dest='max_depth',
-                             help='define max depth for child recursion (0 no child, default infinite depth)')
-    parser_send.add_argument('--single-snapshots', action="store_true",
-                             dest='single_snapshots',
-                             help='send snapshots one by one instead of -I (for broken snapshot chains)')
+    parser_send.add_argument('-s', '--source', action='store', dest='source', help='source filesystem')
+    parser_send.add_argument('-d', '--dest', action='store', dest='dest', help='destination filesystem')
+    parser_send.add_argument('-i', '--key', action='store', dest='key', help='ssh key if only source or dest is remote')
+    parser_send.add_argument(
+        '-j', '--source-key', action='store', dest='source_key', help='ssh key for source if both are remote'
+    )
+    parser_send.add_argument(
+        '-k', '--dest-key', action='store', dest='dest_key', help='ssh key for dest if both are remote'
+    )
+    parser_send.add_argument(
+        '-c', '--compress', action='store', dest='compress', help='compression to use for ssh transfer. default is lzop'
+    )
+    parser_send.add_argument('-e', '--exclude', nargs='+', dest='exclude', help='datasets to exclude')
+    parser_send.add_argument('-w', '--raw', action='store_true', dest='raw', help='raw zfs send. default is false')
+    parser_send.add_argument(
+        '-r', '--resume', action='store_true', dest='resume', help='resumable send. default is false'
+    )
+    parser_send.add_argument(
+        '-l',
+        '--last',
+        action='store',
+        dest='send_last_snapshot',
+        help='stat sending from last snapshot containing string',
+    )
+    parser_send.add_argument(
+        '--dest-auto-create',
+        action='store_true',
+        dest='dest_auto_create',
+        help='create destination if it does not exist. default is false',
+    )
+    parser_send.add_argument(
+        '--retries',
+        action='store',
+        type=int,
+        dest='retries',
+        default=0,
+        help='number of retries on error. default is 0',
+    )
+    parser_send.add_argument(
+        '--retry-interval',
+        action='store',
+        type=int,
+        dest='retry_interval',
+        default=10,
+        help='interval in seconds between retries. default is 10',
+    )
+    parser_send.add_argument(
+        '--max-depth',
+        action='store',
+        type=int,
+        dest='max_depth',
+        help='define max depth for child recursion (0 no child, default infinite depth)',
+    )
+    parser_send.add_argument(
+        '--single-snapshots',
+        action='store_true',
+        dest='single_snapshots',
+        help='send snapshots one by one instead of -I (for broken snapshot chains)',
+    )
 
     parser_fix = subparsers.add_parser('fix', help='fix zfs snapshot from other format to pyznap')
-    parser_fix.add_argument('-t', '--type', action="store",
-                             dest='type', help='snapshot type name')
-    parser_fix.add_argument('-f', '--format', action="store", required=True,
-                             dest='format', help='snapshot format specification (regexp/@predefined[@zfs-auto-snap,@zfsnap])')
-    parser_fix.add_argument('-m', '--map', action="store",
-                             dest='map', help='optional type mapping (old=new:...)')
-    parser_fix.add_argument('-r', '--recurse', action="store_true",
-                             dest='recurse', help='recurse in child filesystems')
+    parser_fix.add_argument('-t', '--type', action='store', dest='type', help='snapshot type name')
+    parser_fix.add_argument(
+        '-f',
+        '--format',
+        action='store',
+        required=True,
+        dest='format',
+        help='snapshot format specification (regexp/@predefined[@zfs-auto-snap,@zfsnap])',
+    )
+    parser_fix.add_argument('-m', '--map', action='store', dest='map', help='optional type mapping (old=new:...)')
+    parser_fix.add_argument('-r', '--recurse', action='store_true', dest='recurse', help='recurse in child filesystems')
     # TODO: time shift
     parser_fix.add_argument('filesystem', nargs='+', help='filesystems to fix')
 
     subparsers.add_parser('full', help='full cycle: snap --take / send / snap --clean')
 
     parser_status = subparsers.add_parser('status', help='check filesystem snapshots status')
-    parser_status.add_argument('--format', action="store", default='log', choices=['log', 'jsonl', 'html'],
-                             dest='status_format', help='status output format')
-    parser_status.add_argument('--all', action="store_true",
-                             dest='status_all', help='show all ZFS filesystems')
-    parser_status.add_argument('--print-config', action="store_true",
-                             dest='print_config', help='only print parsed and processed config')
-    parser_status.add_argument('--values', action="store",
-                             dest='values', help='coma separated values to print')
-    parser_status.add_argument('--filter', action="append",
-                             dest='filter_values', help='add filter for col=value')
-    parser_status.add_argument('--exclude', action="append",
-                             dest='filter_exclude', help='exclude name filesystems (fnmatch)')
+    parser_status.add_argument(
+        '--format',
+        action='store',
+        default='log',
+        choices=['log', 'jsonl', 'html'],
+        dest='status_format',
+        help='status output format',
+    )
+    parser_status.add_argument('--all', action='store_true', dest='status_all', help='show all ZFS filesystems')
+    parser_status.add_argument(
+        '--print-config', action='store_true', dest='print_config', help='only print parsed and processed config'
+    )
+    parser_status.add_argument('--values', action='store', dest='values', help='coma separated values to print')
+    parser_status.add_argument('--filter', action='append', dest='filter_values', help='add filter for col=value')
+    parser_status.add_argument(
+        '--exclude', action='append', dest='filter_exclude', help='exclude name filesystems (fnmatch)'
+    )
 
     parser_verify = subparsers.add_parser('verify', help='verify remote backup health')
-    parser_verify.add_argument('--max-lag', action="store", type=int, default=86400,
-                              dest='max_lag', help='maximum acceptable lag in seconds (default: 86400 = 1 day)')
-    parser_verify.add_argument('--json', action="store_true",
-                              dest='output_json', help='output results as JSON')
-    parser_verify.add_argument('--nagios', action="store_true",
-                              dest='output_nagios', help='Nagios-compatible output')
-    parser_verify.add_argument('--export-metrics', action="store", default=None,
-                              dest='export_metrics', help='export Prometheus metrics to file')
+    parser_verify.add_argument(
+        '--max-lag',
+        action='store',
+        type=int,
+        default=86400,
+        dest='max_lag',
+        help='maximum acceptable lag in seconds (default: 86400 = 1 day)',
+    )
+    parser_verify.add_argument('--json', action='store_true', dest='output_json', help='output results as JSON')
+    parser_verify.add_argument('--nagios', action='store_true', dest='output_nagios', help='Nagios-compatible output')
+    parser_verify.add_argument(
+        '--export-metrics',
+        action='store',
+        default=None,
+        dest='export_metrics',
+        help='export Prometheus metrics to file',
+    )
 
-    parser_validate = subparsers.add_parser('validate-config', help='validate configuration file')
+    subparsers.add_parser('validate-config', help='validate configuration file')
 
-    if len(sys.argv)==1:
+    if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
         sys.exit(1)
     args = parser.parse_args()
@@ -199,7 +239,7 @@ def _main():
 
     e = ErrorHandler()
 
-    loglevel =  logging.INFO
+    loglevel = logging.INFO
     if args.quiet:
         loglevel = logging.WARNING
     if args.verbose:
@@ -221,14 +261,13 @@ def _main():
     root_logger.setLevel(basicloglevel)
 
     config_path = args.config if args.config else os.path.join(CONFIG_DIR, 'pyznap.conf')
-    logadd = ' #'+config_path if args.logconfig else '';
+    logadd = ' #' + config_path if args.logconfig else ''
 
-
-    console_fmt = logging.Formatter('%(asctime)s %(levelname)s: %(message)s'+logadd, datefmt='%b %d %H:%M:%S')
+    console_fmt = logging.Formatter('%(asctime)s %(levelname)s: %(message)s' + logadd, datefmt='%b %d %H:%M:%S')
     if loglevel < logging.WARNING:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(console_fmt)
-        console_handler.addFilter(lambda record: record.levelno < 30) # logging.WARNING make exception in destroy
+        console_handler.addFilter(lambda record: record.levelno < 30)  # logging.WARNING make exception in destroy
         console_handler.setLevel(loglevel)
         root_logger.addHandler(console_handler)
     console_err_handler = logging.StreamHandler(sys.stderr)
@@ -238,9 +277,10 @@ def _main():
 
     if args.syslog:
         # setup logging to syslog
-        syslog_handler = logging.handlers.SysLogHandler(address = '/dev/log',
-            facility=logging.handlers.SysLogHandler.LOG_DAEMON)
-        syslog_handler.setFormatter(logging.Formatter('pyznap: [%(levelname)s] %(message)s'+logadd))
+        syslog_handler = logging.handlers.SysLogHandler(
+            address='/dev/log', facility=logging.handlers.SysLogHandler.LOG_DAEMON
+        )
+        syslog_handler.setFormatter(logging.Formatter('pyznap: [%(levelname)s] %(message)s' + logadd))
         # syslog always level INFO
         syslog_handler.setLevel(logging.INFO)
         root_logger.addHandler(syslog_handler)
@@ -251,20 +291,20 @@ def _main():
         set_dry_run()
 
     if args.matching:
-        settings['matching'] =  args.matching
+        settings['matching'] = args.matching
 
     if args.pidfile is not None:
         if not check_pid(args.pidfile):
-            logger.info('pidfile {} exists, exiting'.format(args.pidfile))
+            logger.info(f'pidfile {args.pidfile} exists, exiting')
             sys.exit(1)
-        open(args.pidfile, "w").write("{}\n".format(os.getpid()))
+        open(args.pidfile, 'w').write(f'{os.getpid()}\n')
     try:
         logger.info('Starting pyznap...')
 
         if args.command in ('snap', 'send', 'full', 'status', 'verify'):
-            logger.info('Read config={}'.format(config_path))
+            logger.info(f'Read config={config_path}')
             config = read_config(config_path)
-            if config == None:
+            if config is None:
                 return 1
 
         if args.command == 'setup':
@@ -338,11 +378,26 @@ def _main():
                 # start send from last snapshot
                 send_last_snapshot = [args.send_last_snapshot] if args.send_last_snapshot else None
 
-                send_config([{'name': args.source, 'dest': [args.dest], 'key': source_key,
-                              'dest_keys': dest_key, 'compress': compress, 'exclude': exclude,
-                              'raw_send': raw, 'resume': resume, 'dest_auto_create': dest_auto_create,
-                              'retries': retries, 'retry_interval': retry_interval, 'max_depth': args.max_depth,
-                              'send_last_snapshot': send_last_snapshot}], settings=settings)
+                send_config(
+                    [
+                        {
+                            'name': args.source,
+                            'dest': [args.dest],
+                            'key': source_key,
+                            'dest_keys': dest_key,
+                            'compress': compress,
+                            'exclude': exclude,
+                            'raw_send': raw,
+                            'resume': resume,
+                            'dest_auto_create': dest_auto_create,
+                            'retries': retries,
+                            'retry_interval': retry_interval,
+                            'max_depth': args.max_depth,
+                            'send_last_snapshot': send_last_snapshot,
+                        }
+                    ],
+                    settings=settings,
+                )
 
             elif args.source and not args.dest:
                 logger.error('Missing dest...')
@@ -365,20 +420,27 @@ def _main():
             if args.print_config:
                 print(str(config))
             else:
-                filter_values=None
+                filter_values = None
                 if args.filter_values:
                     filter_values = {}
                     for fv in args.filter_values:
                         f, v = fv.split('=')
                         v = {'true': True, 'false': False}.get(v.lower(), v)
                         filter_values[f] = v
-                status_config(config, output=args.status_format, show_all=args.status_all,
+                status_config(
+                    config,
+                    output=args.status_format,
+                    show_all=args.status_all,
                     values=tuple(args.values.split(',')) if args.values else None,
-                    filter_values=filter_values, filter_exclude=args.filter_exclude, settings=settings)
+                    filter_values=filter_values,
+                    filter_exclude=args.filter_exclude,
+                    settings=settings,
+                )
 
         elif args.command == 'verify':
-            from .send import parse_name
             import json
+
+            from .send import parse_name
 
             results = []
             overall_status = Status.OK
@@ -388,20 +450,21 @@ def _main():
                     continue
 
                 source_name = conf['name']
-                logger.info(f"Verifying {source_name}...")
+                logger.info(f'Verifying {source_name}...')
 
                 # Open source filesystem
                 try:
                     _type, src_name, user, host, port = parse_name(source_name)
                     if _type == 'ssh':
                         from .ssh import SSH
+
                         key = conf.get('key')
                         ssh_source = SSH(user, host, port=port, key=key)
                         source_fs = zfs.open(src_name, ssh=ssh_source)
                     else:
                         source_fs = zfs.open(source_name)
                 except Exception as err:
-                    logger.error(f"Cannot open source {source_name}: {err}")
+                    logger.error(f'Cannot open source {source_name}: {err}')
                     continue
 
                 # Verify each destination
@@ -413,6 +476,7 @@ def _main():
                         _type, dst_name, user, host, port = parse_name(dest_name)
                         if _type == 'ssh':
                             from .ssh import SSH
+
                             dest_keys = conf.get('dest_keys', [None])
                             dest_key = dest_keys[0] if dest_keys else None
                             ssh_dest = SSH(user, host, port=port, key=dest_key)
@@ -425,29 +489,21 @@ def _main():
                             'verify_thresholds': {
                                 'ok': args.max_lag,
                                 'warning': args.max_lag * 2,
-                                'critical': args.max_lag * 7
+                                'critical': args.max_lag * 7,
                             }
                         }
 
                         report = verify_remote_snapshots(source_fs, dest_fs, verification_config)
 
-                        results.append({
-                            'source': source_name,
-                            'dest': dest_name,
-                            'report': report
-                        })
+                        results.append({'source': source_name, 'dest': dest_name, 'report': report})
 
                         # Update overall status
                         if report.status > overall_status:
                             overall_status = report.status
 
                     except Exception as err:
-                        logger.error(f"Verification failed for {source_name} -> {dest_name}: {err}")
-                        results.append({
-                            'source': source_name,
-                            'dest': dest_name,
-                            'error': str(err)
-                        })
+                        logger.error(f'Verification failed for {source_name} -> {dest_name}: {err}')
+                        results.append({'source': source_name, 'dest': dest_name, 'error': str(err)})
 
             # Output results
             if args.output_json:
@@ -455,29 +511,23 @@ def _main():
                 output = []
                 for result in results:
                     if 'error' in result:
-                        output.append({
-                            'source': result['source'],
-                            'dest': result['dest'],
-                            'status': 'ERROR',
-                            'error': result['error']
-                        })
+                        output.append(
+                            {
+                                'source': result['source'],
+                                'dest': result['dest'],
+                                'status': 'ERROR',
+                                'error': result['error'],
+                            }
+                        )
                     else:
-                        output.append({
-                            'source': result['source'],
-                            'dest': result['dest'],
-                            **result['report'].to_dict()
-                        })
+                        output.append(
+                            {'source': result['source'], 'dest': result['dest'], **result['report'].to_dict()}
+                        )
                 print(json.dumps(output, indent=2))
 
             elif args.output_nagios:
                 # Nagios output
-                status_map = {
-                    Status.OK: 0,
-                    Status.WARNING: 1,
-                    Status.ERROR: 2,
-                    Status.CRITICAL: 2,
-                    Status.UNKNOWN: 3
-                }
+                status_map = {Status.OK: 0, Status.WARNING: 1, Status.ERROR: 2, Status.CRITICAL: 2, Status.UNKNOWN: 3}
 
                 exit_code = status_map.get(overall_status, 3)
 
@@ -485,27 +535,27 @@ def _main():
                 ok_count = sum(1 for r in results if 'error' not in r and r['report'].status == Status.OK)
                 total_count = len(results)
 
-                status_msg = f"PYZNAP {overall_status.value}: {ok_count}/{total_count} destinations OK"
+                status_msg = f'PYZNAP {overall_status.value}: {ok_count}/{total_count} destinations OK'
                 print(status_msg)
 
                 sys.exit(exit_code)
 
             else:
                 # Human-readable output
-                print("\n" + "="*80)
-                print("PYZNAP REMOTE BACKUP VERIFICATION REPORT")
-                print("="*80 + "\n")
+                print('\n' + '=' * 80)
+                print('PYZNAP REMOTE BACKUP VERIFICATION REPORT')
+                print('=' * 80 + '\n')
 
                 for result in results:
                     source = result['source']
                     dest = result['dest']
 
-                    print(f"Source: {source}")
-                    print(f"Destination: {dest}")
-                    print("-" * 80)
+                    print(f'Source: {source}')
+                    print(f'Destination: {dest}')
+                    print('-' * 80)
 
                     if 'error' in result:
-                        print(f"❌ ERROR: {result['error']}\n")
+                        print(f'❌ ERROR: {result["error"]}\n')
                     else:
                         report = result['report']
                         print(report.format_human_readable())
@@ -526,7 +576,7 @@ def _main():
                             status_code = {'OK': 0, 'WARNING': 1, 'ERROR': 2, 'CRITICAL': 3}.get(report.status.value, 3)
                             f.write(f'pyznap_backup_status{{{labels}}} {status_code}\n')
 
-                logger.info(f"Metrics exported to {args.export_metrics}")
+                logger.info(f'Metrics exported to {args.export_metrics}')
 
         elif args.command == 'validate-config':
             # Config already loaded and validated above
@@ -538,8 +588,11 @@ def _main():
             # Show summary
             for conf in config:
                 name = conf['name'] if conf['name'] else '//'
-                snap_types = [st for st in ('frequent', 'hourly', 'daily', 'weekly', 'monthly', 'yearly')
-                             if conf.get(st) and conf.get(st) > 0]
+                snap_types = [
+                    st
+                    for st in ('frequent', 'hourly', 'daily', 'weekly', 'monthly', 'yearly')
+                    if conf.get(st) and conf.get(st) > 0
+                ]
                 dest = conf.get('dest')
                 dest_count = len(dest) if dest else 0
 
@@ -575,5 +628,5 @@ def main():
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

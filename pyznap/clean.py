@@ -1,20 +1,21 @@
 """
-    pyznap.clean
-    ~~~~~~~~~~~~~~
+pyznap.clean
+~~~~~~~~~~~~~~
 
-    Clean snapshots.
+Clean snapshots.
 
-    :copyright: (c) 2018-2019 by Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2018-2019 by Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
 import logging
-from datetime import datetime
 from subprocess import CalledProcessError
+
+import pyznap.pyzfs as zfs
+
+from .process import DatasetBusyError, DatasetNotFoundError
 from .ssh import SSH, SSHException
 from .utils import SNAPSHOT_TYPES, parse_name
-import pyznap.pyzfs as zfs
-from .process import DatasetBusyError, DatasetNotFoundError
 
 
 def clean_snap(snap, output_handler=None):
@@ -35,14 +36,9 @@ def clean_snap(snap, output_handler=None):
 
     logger = logging.getLogger(__name__)
 
-    logger.info('Deleting snapshot {}...'.format(snap))
+    logger.info(f'Deleting snapshot {snap}...')
 
-    operation = {
-        'action': 'delete',
-        'snapshot': str(snap),
-        'status': 'success',
-        'error': None
-    }
+    operation = {'action': 'delete', 'snapshot': str(snap), 'status': 'success', 'error': None}
 
     try:
         snap.destroy()
@@ -51,11 +47,11 @@ def clean_snap(snap, output_handler=None):
         operation['status'] = 'error'
         operation['error'] = str(err)
     except CalledProcessError as err:
-        logger.error('Error while deleting snapshot {}: \'{}\'...'.format(snap, err.stderr.rstrip()))
+        logger.error(f"Error while deleting snapshot {snap}: '{err.stderr.rstrip()}'...")
         operation['status'] = 'error'
         operation['error'] = err.stderr.rstrip()
     except KeyboardInterrupt:
-        logger.error('KeyboardInterrupt while cleaning snapshot {}...'.format(snap))
+        logger.error(f'KeyboardInterrupt while cleaning snapshot {snap}...')
         operation['status'] = 'error'
         operation['error'] = 'KeyboardInterrupt'
         raise
@@ -80,14 +76,14 @@ def clean_filesystem(filesystem, conf, output_handler=None):
     """
 
     logger = logging.getLogger(__name__)
-    logger.debug('Cleaning snapshots on {}...'.format(filesystem))
+    logger.debug(f'Cleaning snapshots on {filesystem}...')
 
     snapshots = {t: [] for t in SNAPSHOT_TYPES}
     # catch exception if dataset was destroyed since pyznap was started
     try:
         fs_snapshots = filesystem.snapshots()
     except (DatasetNotFoundError, DatasetBusyError) as err:
-        logger.error('Error while opening {}: {}...'.format(filesystem, err))
+        logger.error(f'Error while opening {filesystem}: {err}...')
         return 1
     # categorize snapshots
     for snap in fs_snapshots:
@@ -105,11 +101,11 @@ def clean_filesystem(filesystem, conf, output_handler=None):
         snaps.reverse()
 
     for stype in reversed(SNAPSHOT_TYPES):
-        for snap in snapshots[stype][conf[stype]:]:
+        for snap in snapshots[stype][conf[stype] :]:
             clean_snap(snap, output_handler)
 
 
-def clean_config(config, settings={}, output_handler=None):
+def clean_config(config, settings=None, output_handler=None):
     """Deletes old snapshots according to strategies given in config. Goes through each config,
     opens up ssh connection if necessary and then recursively calls clean_filesystem.
 
@@ -123,6 +119,8 @@ def clean_config(config, settings={}, output_handler=None):
         Output handler for JSON output
     """
 
+    if settings is None:
+        settings = {}
     logger = logging.getLogger(__name__)
     logger.info('Cleaning snapshots...')
 
@@ -136,7 +134,7 @@ def clean_config(config, settings={}, output_handler=None):
         try:
             _type, fsname, user, host, port = parse_name(name)
         except ValueError as err:
-            logger.error('Could not parse {:s}: {}...'.format(name, err))
+            logger.error(f'Could not parse {name:s}: {err}...')
             continue
 
         if _type == 'ssh':
@@ -144,7 +142,7 @@ def clean_config(config, settings={}, output_handler=None):
                 ssh = SSH(user, host, port=port, key=conf['key'])
             except (FileNotFoundError, SSHException):
                 continue
-            name_log = '{:s}@{:s}:{:s}'.format(user, host, fsname)
+            name_log = f'{user:s}@{host:s}:{fsname:s}'
         else:
             ssh = None
             name_log = fsname
@@ -154,25 +152,24 @@ def clean_config(config, settings={}, output_handler=None):
         try:
             # Children includes the base filesystem (named 'fsname')
             children = zfs.find_exclude(conf, config, matching=settings['matching'])
-        except DatasetNotFoundError as err:
+        except DatasetNotFoundError:
             if conf.get('ignore_not_existing'):
-                logger.warning('Dataset {:s} does not exist...'.format(name_log))
+                logger.warning(f'Dataset {name_log:s} does not exist...')
             else:
-                logger.error('Dataset {:s} does not exist...'.format(name_log))
+                logger.error(f'Dataset {name_log:s} does not exist...')
             continue
         except ValueError as err:
             logger.error(err)
             continue
         except CalledProcessError as err:
-            logger.error('Error while opening {:s}: \'{:s}\'...'
-                         .format(name_log, err.stderr.rstrip()))
+            logger.error(f"Error while opening {name_log:s}: '{err.stderr.rstrip():s}'...")
         else:
             # Clean snapshots of parent filesystem - ignore exclude property for top fs
             clean_filesystem(children[0], conf, output_handler)
             # Clean snapshots of all children that don't have a seperate config entry
             for child in children[1:]:
                 if snap_exclude_property and child.ispropval(snap_exclude_property, check='false'):
-                    logger.debug('Ignore dataset {:s}, have property {:s}=false'.format(child.name, snap_exclude_property))
+                    logger.debug(f'Ignore dataset {child.name:s}, have property {snap_exclude_property:s}=false')
                 else:
                     clean_filesystem(child, conf, output_handler)
         finally:

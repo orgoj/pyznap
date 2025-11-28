@@ -5,19 +5,20 @@ Unit tests for pyznap.send_helpers module.
 Tests helper classes and utilities for send operations.
 """
 
-import pytest
-from unittest.mock import Mock, patch
 import sys
+from unittest.mock import Mock
+
+import pytest
 
 sys.path.insert(0, '/home/user/pyznap')
 
 from pyznap.send_helpers import (
-    ParsedName,
     DestConfig,
-    SourceContext,
     DestContext,
+    ParsedName,
+    SourceContext,
     SSHManager,
-    extract_config_list_value
+    extract_config_list_value,
 )
 
 
@@ -37,13 +38,7 @@ class TestParsedName:
 
     def test_ssh_filesystem(self):
         """Test SSH filesystem parsing."""
-        parsed = ParsedName(
-            type='ssh',
-            name='backup/data',
-            user='root',
-            host='backup.example.com',
-            port=22
-        )
+        parsed = ParsedName(type='ssh', name='backup/data', user='root', host='backup.example.com', port=22)
 
         assert parsed.type == 'ssh'
         assert parsed.name == 'backup/data'
@@ -59,13 +54,7 @@ class TestParsedName:
 
     def test_display_name_ssh(self):
         """Test display name for SSH filesystem."""
-        parsed = ParsedName(
-            type='ssh',
-            name='backup/data',
-            user='root',
-            host='backup.example.com',
-            port=22
-        )
+        parsed = ParsedName(type='ssh', name='backup/data', user='root', host='backup.example.com', port=22)
         assert parsed.display_name == 'root@backup.example.com:backup/data'
 
 
@@ -82,7 +71,7 @@ class TestDestConfig:
             send_last_snapshot=False,
             dest_auto_create=False,
             retries=3,
-            retry_interval=10
+            retry_interval=10,
         )
 
         assert config.name == 'backup/data'
@@ -101,7 +90,7 @@ class TestDestConfig:
             send_last_snapshot='no',  # Should be converted to False
             dest_auto_create=False,
             retries=0,
-            retry_interval=10
+            retry_interval=10,
         )
 
         assert config.send_last_snapshot is False
@@ -116,7 +105,7 @@ class TestDestConfig:
             send_last_snapshot=False,
             dest_auto_create=False,
             retries=0,
-            retry_interval=10
+            retry_interval=10,
         )
 
         assert config.exclude == []
@@ -216,7 +205,7 @@ class TestSSHManager:
         mock_ssh.close = Mock()
 
         # Manually add connection to test storage
-        conn_id = "root@example.com:22"
+        conn_id = 'root@example.com:22'
         SSHManager._connections[conn_id] = mock_ssh
 
         # Verify it's stored
@@ -234,15 +223,15 @@ class TestSSHManager:
         mock_ssh3 = Mock()
 
         # Add connections with different IDs
-        SSHManager._connections["root@host1.com:22"] = mock_ssh1
-        SSHManager._connections["user@host1.com:22"] = mock_ssh2  # different user
-        SSHManager._connections["root@host1.com:2222"] = mock_ssh3  # different port
+        SSHManager._connections['root@host1.com:22'] = mock_ssh1
+        SSHManager._connections['user@host1.com:22'] = mock_ssh2  # different user
+        SSHManager._connections['root@host1.com:2222'] = mock_ssh3  # different port
 
         # Verify all are stored separately
         assert len(SSHManager._connections) == 3
-        assert SSHManager._connections["root@host1.com:22"] is mock_ssh1
-        assert SSHManager._connections["user@host1.com:22"] is mock_ssh2
-        assert SSHManager._connections["root@host1.com:2222"] is mock_ssh3
+        assert SSHManager._connections['root@host1.com:22'] is mock_ssh1
+        assert SSHManager._connections['user@host1.com:22'] is mock_ssh2
+        assert SSHManager._connections['root@host1.com:2222'] is mock_ssh3
 
     def test_connection_id_format(self):
         """Test that connection IDs are formatted correctly."""
@@ -252,13 +241,13 @@ class TestSSHManager:
         mock_ssh1 = Mock()
         mock_ssh2 = Mock()
 
-        SSHManager._connections["root@host1.com:22"] = mock_ssh1
-        SSHManager._connections["root@host2.com:2222"] = mock_ssh2
+        SSHManager._connections['root@host1.com:22'] = mock_ssh1
+        SSHManager._connections['root@host2.com:2222'] = mock_ssh2
 
         # Verify both are stored
         assert len(SSHManager._connections) == 2
-        assert "root@host1.com:22" in SSHManager._connections
-        assert "root@host2.com:2222" in SSHManager._connections
+        assert 'root@host1.com:22' in SSHManager._connections
+        assert 'root@host2.com:2222' in SSHManager._connections
 
     def test_close_all(self):
         """Test closing all SSH connections."""
@@ -268,8 +257,8 @@ class TestSSHManager:
         mock_ssh1 = Mock()
         mock_ssh2 = Mock()
 
-        SSHManager._connections["root@host1.com:22"] = mock_ssh1
-        SSHManager._connections["root@host2.com:22"] = mock_ssh2
+        SSHManager._connections['root@host1.com:22'] = mock_ssh1
+        SSHManager._connections['root@host2.com:22'] = mock_ssh2
 
         SSHManager.close_all()
 
@@ -285,8 +274,8 @@ class TestSSHManager:
         mock_ssh1 = Mock()
         mock_ssh2 = Mock()
 
-        SSHManager._connections["root@host1.com:22"] = mock_ssh1
-        SSHManager._connections["root@host2.com:22"] = mock_ssh2
+        SSHManager._connections['root@host1.com:22'] = mock_ssh1
+        SSHManager._connections['root@host2.com:22'] = mock_ssh2
 
         SSHManager.close('root', 'host1.com', 22)
 

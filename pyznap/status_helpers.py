@@ -5,12 +5,10 @@ This module provides structured data classes and helper functions
 to make status operations more maintainable and testable.
 """
 
-import os
 import logging
-from typing import List, Dict, Optional
 from collections import OrderedDict
 from datetime import datetime
-
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +27,7 @@ class FilesystemOperations:
         excluded: Whether filesystem is excluded from all operations
     """
 
-    def __init__(self, snap: bool = False, clean: bool = False,
-                 send: bool = False, excluded: bool = False):
+    def __init__(self, snap: bool = False, clean: bool = False, send: bool = False, excluded: bool = False):
         self.snap = snap
         self.clean = clean
         self.send = send
@@ -41,7 +38,7 @@ class FilesystemOperations:
         return self.snap or self.clean or self.send
 
     def __repr__(self):
-        return f"FilesystemOperations(snap={self.snap}, clean={self.clean}, send={self.send}, excluded={self.excluded})"
+        return f'FilesystemOperations(snap={self.snap}, clean={self.clean}, send={self.send}, excluded={self.excluded})'
 
 
 class DestStatus:
@@ -162,7 +159,7 @@ class FilesystemStatus:
         for stype in SNAPSHOT_TYPES:
             count = len(self.snapshots.get(stype, []))
             expected = 0  # This should come from config
-            status[f'snapshot-types-{stype}'] = f"{count}/{expected}"
+            status[f'snapshot-types-{stype}'] = f'{count}/{expected}'
 
         # Destinations
         status['dest'] = [d.name for d in self.destinations]
@@ -237,7 +234,7 @@ class SnapshotCategorizer:
                 if snap_type in snapshots:
                     snapshots[snap_type].append(snap)
             except (ValueError, KeyError, IndexError):
-                logger.debug(f"Could not categorize snapshot: {snap.name}")
+                logger.debug(f'Could not categorize snapshot: {snap.name}')
                 continue
 
         # Reverse sort by time (newest first)
@@ -284,31 +281,26 @@ def determine_operations(filesystem, conf: Dict, main_fs: bool = False) -> Files
     if not main_fs and snap_exclude_property:
         try:
             if filesystem.ispropval(snap_exclude_property, check='false'):
-                logger.debug(f"Excluding {filesystem.name} from snap/clean by property {snap_exclude_property}=false")
+                logger.debug(f'Excluding {filesystem.name} from snap/clean by property {snap_exclude_property}=false')
                 snap = False
                 clean = False
         except Exception as err:
-            logger.debug(f"Could not check snap exclude property: {err}")
+            logger.debug(f'Could not check snap exclude property: {err}')
 
     # Check send exclude property
     send_exclude_property = conf.get('send_exclude_property')
     if not main_fs and send_exclude_property:
         try:
             if filesystem.ispropval(send_exclude_property, check='false'):
-                logger.debug(f"Excluding {filesystem.name} from send by property {send_exclude_property}=false")
+                logger.debug(f'Excluding {filesystem.name} from send by property {send_exclude_property}=false')
                 send = False
         except Exception as err:
-            logger.debug(f"Could not check send exclude property: {err}")
+            logger.debug(f'Could not check send exclude property: {err}')
 
     # Determine if excluded
     excluded = not (snap or clean or send)
 
-    return FilesystemOperations(
-        snap=snap,
-        clean=clean,
-        send=send,
-        excluded=excluded
-    )
+    return FilesystemOperations(snap=snap, clean=clean, send=send, excluded=excluded)
 
 
 def should_skip_filesystem(fs_name: str, filter_exclude: Optional[List[str]]) -> bool:
@@ -329,7 +321,7 @@ def should_skip_filesystem(fs_name: str, filter_exclude: Optional[List[str]]) ->
 
     for pattern in filter_exclude:
         if fnmatch(fs_name, pattern):
-            logger.debug(f"Excluding filesystem {fs_name} by --exclude {pattern}")
+            logger.debug(f'Excluding filesystem {fs_name} by --exclude {pattern}')
             return True
 
     return False
@@ -353,15 +345,11 @@ def extract_snapshot_info(snapshot) -> Dict[str, any]:
         return {
             'timestamp': timestamp,
             'referenced': int(props['referenced'][0]),
-            'logicalreferenced': int(props.get('logicalreferenced', [0])[0])
+            'logicalreferenced': int(props.get('logicalreferenced', [0])[0]),
         }
     except (KeyError, ValueError, IndexError) as err:
-        logger.debug(f"Could not extract snapshot info: {err}")
-        return {
-            'timestamp': None,
-            'referenced': 0,
-            'logicalreferenced': 0
-        }
+        logger.debug(f'Could not extract snapshot info: {err}')
+        return {'timestamp': None, 'referenced': 0, 'logicalreferenced': 0}
 
 
 def check_snapshot_counts(categorized: Dict[str, List], policy: Dict[str, int]) -> tuple:
@@ -402,6 +390,6 @@ def bytes_fmt(num: int) -> str:
     """
     for unit in ['', 'K', 'M', 'G', 'T', 'P']:
         if abs(num) < 1024.0:
-            return f"{num:.1f}{unit}"
+            return f'{num:.1f}{unit}'
         num /= 1024.0
-    return f"{num:.1f}E"
+    return f'{num:.1f}E'

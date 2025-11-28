@@ -4,9 +4,11 @@ Unit tests for config validation.
 Tests the validate_config() function in pyznap.utils.
 """
 
-import pytest
-import tempfile
 import os
+import tempfile
+
+import pytest
+
 from pyznap.utils import validate_config
 
 
@@ -24,7 +26,7 @@ class TestValidateConfig:
                 'snap': True,
                 'clean': True,
                 'dest': ['backup/data'],
-                'compress': ['lzop']
+                'compress': ['lzop'],
             }
         ]
 
@@ -37,7 +39,7 @@ class TestValidateConfig:
             {
                 'name': 'tank/data',
                 'hourly': -5,  # Invalid
-                'snap': True
+                'snap': True,
             }
         ]
 
@@ -51,7 +53,7 @@ class TestValidateConfig:
             {
                 'name': 'tank/data',
                 'hourly': 'abc',  # Invalid
-                'snap': True
+                'snap': True,
             }
         ]
 
@@ -65,7 +67,7 @@ class TestValidateConfig:
             {
                 'name': 'tank/data',
                 'snap': 'maybe',  # Invalid
-                'hourly': 24
+                'hourly': 24,
             }
         ]
 
@@ -81,7 +83,7 @@ class TestValidateConfig:
                 'hourly': 24,
                 'snap': True,
                 'dest': ['backup/data', 'ssh::user@host:backup/data'],
-                'compress': ['lzop']  # Only 1 entry, but dest has 2
+                'compress': ['lzop'],  # Only 1 entry, but dest has 2
             }
         ]
 
@@ -104,7 +106,7 @@ class TestValidateConfig:
                     'hourly': 24,
                     'snap': True,
                     'dest': ['backup/data'],
-                    'dest_keys': [key1, key2]  # Too many
+                    'dest_keys': [key1, key2],  # Too many
                 }
             ]
 
@@ -117,14 +119,7 @@ class TestValidateConfig:
 
     def test_nonexistent_ssh_key(self):
         """Test that missing SSH key files are detected."""
-        config = [
-            {
-                'name': 'tank/data',
-                'hourly': 24,
-                'snap': True,
-                'key': '/nonexistent/path/id_rsa'
-            }
-        ]
+        config = [{'name': 'tank/data', 'hourly': 24, 'snap': True, 'key': '/nonexistent/path/id_rsa'}]
 
         errors = validate_config(config)
         assert len(errors) == 1
@@ -138,7 +133,7 @@ class TestValidateConfig:
                 'hourly': 24,
                 'snap': True,
                 'dest': ['ssh::user@host:backup/data'],
-                'dest_keys': ['/nonexistent/path/id_rsa']
+                'dest_keys': ['/nonexistent/path/id_rsa'],
             }
         ]
 
@@ -154,14 +149,7 @@ class TestValidateConfig:
             f.write('fake key content')
 
         try:
-            config = [
-                {
-                    'name': 'tank/data',
-                    'hourly': 24,
-                    'snap': True,
-                    'key': key_path
-                }
-            ]
+            config = [{'name': 'tank/data', 'hourly': 24, 'snap': True, 'key': key_path}]
 
             errors = validate_config(config)
             assert len(errors) == 0
@@ -177,7 +165,7 @@ class TestValidateConfig:
                 'daily': 'abc',  # Error 2
                 'snap': 'maybe',  # Error 3
                 'dest': ['backup/data'],
-                'compress': ['lzop', 'gzip']  # Error 4
+                'compress': ['lzop', 'gzip'],  # Error 4
             }
         ]
 
@@ -186,26 +174,14 @@ class TestValidateConfig:
 
     def test_valid_max_depth(self):
         """Test that valid max_depth values pass."""
-        config = [
-            {
-                'name': 'tank/data',
-                'hourly': 24,
-                'max_depth': 5
-            }
-        ]
+        config = [{'name': 'tank/data', 'hourly': 24, 'max_depth': 5}]
 
         errors = validate_config(config)
         assert len(errors) == 0
 
     def test_invalid_max_depth(self):
         """Test that invalid max_depth is rejected."""
-        config = [
-            {
-                'name': 'tank/data',
-                'hourly': 24,
-                'max_depth': 'invalid'
-            }
-        ]
+        config = [{'name': 'tank/data', 'hourly': 24, 'max_depth': 'invalid'}]
 
         errors = validate_config(config)
         assert len(errors) == 1
@@ -219,13 +195,7 @@ class TestValidateConfig:
 
     def test_root_filesystem(self):
         """Test validation for root filesystem (//)."""
-        config = [
-            {
-                'name': '',
-                'hourly': 24,
-                'snap': True
-            }
-        ]
+        config = [{'name': '', 'hourly': 24, 'snap': True}]
 
         errors = validate_config(config)
         assert len(errors) == 0
@@ -237,6 +207,7 @@ class TestValidateConfigWarnings:
     def test_dest_without_snap_warning(self, caplog):
         """Test warning when dest is set but snap is disabled."""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         config = [
@@ -244,7 +215,7 @@ class TestValidateConfigWarnings:
                 'name': 'tank/data',
                 'hourly': 24,
                 'snap': False,  # snap disabled
-                'dest': ['backup/data']  # but dest configured
+                'dest': ['backup/data'],  # but dest configured
             }
         ]
 
@@ -255,6 +226,7 @@ class TestValidateConfigWarnings:
     def test_snap_without_types_warning(self, caplog):
         """Test warning when snap is enabled but no snapshot types configured."""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         config = [

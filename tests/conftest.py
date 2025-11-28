@@ -5,10 +5,11 @@ This module provides reusable fixtures for testing pyznap components,
 including mocked ZFS filesystems, SSH connections, and snapshots.
 """
 
-import pytest
-from datetime import datetime, timedelta
-from unittest.mock import Mock, MagicMock
 from collections import OrderedDict
+from datetime import datetime, timedelta
+from unittest.mock import Mock
+
+import pytest
 
 
 @pytest.fixture
@@ -19,6 +20,7 @@ def mock_snapshot():
     Returns:
         Mock snapshot with name, creation time, and properties
     """
+
     def _create_snapshot(name, hours_ago=0, snap_type='daily', used=1000000, referenced=5000000):
         creation_time = datetime.now() - timedelta(hours=hours_ago)
         timestamp = int(creation_time.timestamp())
@@ -31,7 +33,7 @@ def mock_snapshot():
             'creation': (str(timestamp), 'default'),
             'used': (str(used), 'default'),
             'referenced': (str(referenced), 'default'),
-            'logicalreferenced': (str(referenced), 'default')
+            'logicalreferenced': (str(referenced), 'default'),
         }
         snapshot.getprops.return_value = props
 
@@ -48,6 +50,7 @@ def mock_filesystem():
     Returns:
         Mock filesystem with snapshots and properties
     """
+
     def _create_filesystem(name, snapshots_list=None):
         filesystem = Mock()
         filesystem.name = name
@@ -81,6 +84,7 @@ def mock_ssh_connection():
     Returns:
         Mock SSH object with user, host, port attributes
     """
+
     def _create_ssh(user='root', host='example.com', port=22):
         ssh = Mock()
         ssh.user = user
@@ -140,7 +144,7 @@ def sample_config():
         'snap_exclude_property': None,
         'send_exclude_property': None,
         'dest_auto_create': [False],
-        'send_last_snapshot': [False]
+        'send_last_snapshot': [False],
     }
 
 
