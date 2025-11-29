@@ -338,8 +338,11 @@ def send_filesystem_stepwise(
     target_snapshot = snapshots[0]  # Most recent
 
     # Open or create destination
+    resume_token = None
     try:
         dest_fs = zfs.open(dest_name, ssh=ssh_dest)
+        # Check for resume token (partial receive state)
+        resume_token = dest_fs.getprops().get('receive_resume_token', (None, None))[0]
         dest_snapnames = [snap.name.split('@')[1] for snap in dest_fs.snapshots()]
     except DatasetNotFoundError:
         if dest_auto_create:
@@ -355,6 +358,37 @@ def send_filesystem_stepwise(
     except CalledProcessError as err:
         logger.error(f"Error while opening dest {dest_name_log:s}: '{err.stderr.rstrip():s}'...")
         return 1
+
+    # Handle resume token if present (from interrupted transfer)
+    if resume_token is not None:
+        if resume:
+            # Use oldest snapshot for size estimation
+            base_for_resume = snapshots[-1] if snapshots else None
+            size_str = (
+                bytes_fmt(base_for_resume.stream_size(raw=raw, resume_token=resume_token)) if base_for_resume else '?'
+            )
+            logger.info(f'Found resume token. Resuming last transfer of {dest_name_log:s} (~{size_str:s})...')
+            rc = send_snap(
+                base_for_resume,
+                dest_name,
+                base=None,
+                ssh_dest=ssh_dest,
+                raw=raw,
+                resume=True,
+                resume_token=resume_token,
+            )
+            if rc:
+                logger.error('Failed to resume transfer, cannot continue stepwise send...')
+                return rc
+            # Update snapshots after resume completes
+            dest_fs = zfs.open(dest_name, ssh=ssh_dest)
+            dest_snapnames = [snap.name.split('@')[1] for snap in dest_fs.snapshots()]
+        else:
+            logger.error(
+                f'{dest_name_log:s} contains partially-complete state from "zfs receive -s". '
+                f'Use resume=yes to continue or manually abort with: zfs receive -A {dest_name}'
+            )
+            return 1
 
     # Find common snapshots
     common = set(snapnames) & set(dest_snapnames)

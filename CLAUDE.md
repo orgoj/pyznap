@@ -4,8 +4,7 @@
 
 ```bash
 # Setup development environment
-source .venv/bin/activate
-pip install -e .[dev]
+make install-dev
 
 # Run linting
 make lint
@@ -74,18 +73,16 @@ Integration tests require:
 
 ## Code Style
 
-**IMPORTANT: Always follow this order: format → lint → test**
+**🚨 CRITICAL - MANDATORY ORDER (NEVER VIOLATE):**
 
-```bash
-# 1. Format first
-make format
-
-# 2. Then lint
-make lint
-
-# 3. Then test
-make test-unit
 ```
+1. make format    ← FIRST!
+2. make lint      ← SECOND!
+3. make test-unit ← THIRD!
+4. git commit     ← LAST!
+```
+
+**NEVER run tests before lint. NEVER run lint before format. VIOLATION = IMMEDIATE STOP.**
 
 - **Formatter**: ruff format
 - **Linter**: ruff check
