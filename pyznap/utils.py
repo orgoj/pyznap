@@ -123,6 +123,15 @@ def validate_config(config):
                         f'(must be equal or omit resume)'
                     )
 
+            # Check single_snapshots
+            single_snapshots = entry.get('single_snapshots')
+            if single_snapshots and isinstance(single_snapshots, list):
+                if len(single_snapshots) != dest_count:
+                    errors.append(
+                        f'{name}: dest has {dest_count} entries but single_snapshots has {len(single_snapshots)} '
+                        f'(must be equal or omit single_snapshots)'
+                    )
+
             # Check retries
             retries = entry.get('retries')
             if retries and isinstance(retries, list):
@@ -257,6 +266,7 @@ def read_config(path):
         'raw_send',
         'resume',
         'dest_auto_create',
+        'single_snapshots',
         'retries',
         'retry_interval',
         'ignore_not_existing',
@@ -308,7 +318,7 @@ def read_config(path):
                     dic[option] = [
                         [i.strip() for i in s.strip().split(' ')] if s.strip() else None for s in value.split(',')
                     ]
-                elif option in ['raw_send', 'resume', 'dest_auto_create']:
+                elif option in ['raw_send', 'resume', 'dest_auto_create', 'single_snapshots']:
                     dic[option] = [{'yes': True, 'no': False}.get(i.strip().lower(), None) for i in value.split(',')]
                 elif option in ['retries', 'retry_interval']:
                     dic[option] = [int(i) for i in value.split(',')]

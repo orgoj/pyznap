@@ -503,6 +503,8 @@ def send_config(config, settings=None):
                 send_last_snapshot = False
             # check if we should create dataset if it doesn't exist
             dest_auto_create = conf['dest_auto_create'].pop(0) if conf.get('dest_auto_create', None) else False
+            # check if single_snapshots (stepwise send) was requested
+            single_snapshots_conf = conf['single_snapshots'].pop(0) if conf.get('single_snapshots', None) else None
 
             try:
                 _type, dest_name, user, host, port = parse_name(backup_dest)
@@ -563,8 +565,12 @@ def send_config(config, settings=None):
                     continue
                 # TODO: create missing skipped filesystem on destination
                 # send not excluded filesystems
-                # Choose send function based on single_snapshots setting
-                single_snapshots = settings.get('single_snapshots', False)
+                # Choose send function based on single_snapshots setting (config or CLI flag)
+                single_snapshots = (
+                    single_snapshots_conf
+                    if single_snapshots_conf is not None
+                    else settings.get('single_snapshots', False)
+                )
                 send_func = send_filesystem_stepwise if single_snapshots else send_filesystem
 
                 for retry in range(1, retries + 2):

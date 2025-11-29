@@ -171,6 +171,7 @@ Here is a list of all options you can set in the config fie:
 | `raw_send`              | List of yes/no  | Use zfs raw send (supported from ZFS 0.8.0). Comma-separated list for multiple dest |
 | `resume`                | List of yes/no  | Use resumable send/receive (supported from ZFS 0.7.0). Comma-separated list for multiple dest |
 | `dest_auto_create`      | List of yes/no  | Automatically create missing root datasets. Comma-separated list for multiple dest |
+| `single_snapshots`      | List of yes/no  | Use stepwise send (-i) instead of incremental (-I). Useful when -I fails with "Invalid argument" due to broken snapshot chains. Comma-separated list for multiple dest |
 | `retries`               | List of integer | Number of retries on connection issues. Comma-separated list for multiple dest |
 | `retry_interval`        | List of integer | Time in seconds between retries. Comma-separated list for multiple dest |
 | `send_last_snapshot`    | string          | Start send with last snapshot if defined (select snapshot containig string (eg. daily) or last, 'no' disable) |
