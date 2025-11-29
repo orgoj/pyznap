@@ -10,8 +10,6 @@ Test pyznap over time.
 """
 
 import logging
-import random
-import string
 import subprocess as sp
 from datetime import datetime, timedelta
 from subprocess import Popen
@@ -22,16 +20,12 @@ import pytest
 import pyznap.pyzfs as zfs
 from pyznap.process import DatasetNotFoundError
 from pyznap.utils import exists
+from tests.test_utils import randomword
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%b %d %H:%M:%S')
 logger = logging.getLogger(__name__)
 
 assert exists('faketime')
-
-
-def randomword(length):
-    letters = string.ascii_lowercase
-    return ''.join(random.choice(letters) for i in range(length))
 
 
 ZPOOL = '/sbin/zpool'
@@ -61,6 +55,8 @@ def zpools():
     """Creates two temporary zpools to be called from test functions. Yields the two pool names
     and destroys them after testing."""
 
+    created_pools = []
+
     # Create temporary files on which the zpools are created
     with NamedTemporaryFile() as file0, NamedTemporaryFile() as file1:
         filename0 = file0.name
@@ -74,30 +70,33 @@ def zpools():
         file1.write(b'0')
         file1.seek(0)
 
-        # Create temporary test pools
-        for pool, filename in zip([POOL0, POOL1], [filename0, filename1]):
-            try:
-                sp.check_call([ZPOOL, 'create', pool, filename])
-            except sp.CalledProcessError as err:
-                logger.error(err)
-                return
-
         try:
-            fs0 = zfs.open(POOL0)
-            fs1 = zfs.open(POOL1)
-            assert fs0.name == POOL0
-            assert fs1.name == POOL1
-        except (DatasetNotFoundError, AssertionError, Exception) as err:
-            logger.error(err)
-        else:
-            yield fs0, fs1
+            # Create temporary test pools
+            for pool, filename in zip([POOL0, POOL1], [filename0, filename1]):
+                try:
+                    sp.check_call([ZPOOL, 'create', pool, filename])
+                    created_pools.append(pool)
+                except sp.CalledProcessError as err:
+                    logger.error(err)
+                    return
 
-        # Destroy temporary test pools
-        for pool in [POOL0, POOL1]:
             try:
-                sp.check_call([ZPOOL, 'destroy', pool])
-            except sp.CalledProcessError as err:
+                fs0 = zfs.open(POOL0)
+                fs1 = zfs.open(POOL1)
+                assert fs0.name == POOL0
+                assert fs1.name == POOL1
+            except (DatasetNotFoundError, AssertionError, Exception) as err:
                 logger.error(err)
+            else:
+                yield fs0, fs1
+
+        finally:
+            # Destroy temporary test pools (always runs)
+            for pool in created_pools:
+                try:
+                    sp.check_call([ZPOOL, 'destroy', pool])
+                except sp.CalledProcessError as err:
+                    logger.error(err)
 
 
 @pytest.fixture(scope='module')
@@ -136,6 +135,7 @@ def config_send():
             f'snap = yes\n'
             f'clean = yes\n'
             f'dest = {POOL1}\n'
+            f'dest_auto_create = yes\n'
             f'[{POOL1}]\n'
             f'frequent = {N_FREQUENT}\n'
             f'hourly = {N_HOURLY}\n'
@@ -165,7 +165,7 @@ class TestCycle:
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
             # take snaps every 1min
-            _, _ = Popen(pyznap_snap).communicate()
+            _, _ = Popen(pyznap_snap).communicate(timeout=60)
 
             # get all snapshots
             snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -193,7 +193,7 @@ class TestCycle:
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
             # take snaps every 15min
-            _, _ = Popen(pyznap_snap).communicate()
+            _, _ = Popen(pyznap_snap).communicate(timeout=60)
 
             # get all snapshots
             snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -222,7 +222,7 @@ class TestCycle:
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
             # take snaps every 1h
-            _, _ = Popen(pyznap_snap).communicate()
+            _, _ = Popen(pyznap_snap).communicate(timeout=60)
 
             # get all snapshots
             snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -254,7 +254,7 @@ class TestCycle:
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
             # take snaps every 1d
-            _, _ = Popen(pyznap_snap).communicate()
+            _, _ = Popen(pyznap_snap).communicate(timeout=60)
 
             # get all snapshots
             snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -289,7 +289,7 @@ class TestCycle:
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
             # take snaps every 7d
-            _, _ = Popen(pyznap_snap).communicate()
+            _, _ = Popen(pyznap_snap).communicate(timeout=60)
 
             # get all snapshots
             snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -327,7 +327,7 @@ class TestCycle:
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
             # take snaps every 31d
-            _, _ = Popen(pyznap_snap).communicate()
+            _, _ = Popen(pyznap_snap).communicate(timeout=60)
 
             # get all snapshots
             snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -368,7 +368,7 @@ class TestCycle:
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
             # take snaps every 1y
-            _, _ = Popen(pyznap_snap).communicate()
+            _, _ = Popen(pyznap_snap).communicate(timeout=60)
 
             # get all snapshots
             snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -418,9 +418,9 @@ class TestSend:
             pyznap_send = faketime + ['pyznap', '--config', config_send, 'send']
 
             # take, send & clean snaps every 1y
-            _, _ = Popen(pyznap_take).communicate()
-            _, _ = Popen(pyznap_send).communicate()
-            _, _ = Popen(pyznap_clean).communicate()
+            _, _ = Popen(pyznap_take).communicate(timeout=60)
+            _, _ = Popen(pyznap_send).communicate(timeout=60)
+            _, _ = Popen(pyznap_clean).communicate(timeout=60)
 
             # get all snapshots on fs0
             snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -475,9 +475,9 @@ class TestSend:
             pyznap_send = faketime + ['pyznap', '--config', config_send, 'send']
 
             # take, send & clean snaps every 1y
-            _, _ = Popen(pyznap_take).communicate()
-            _, _ = Popen(pyznap_send).communicate()
-            _, _ = Popen(pyznap_clean).communicate()
+            _, _ = Popen(pyznap_take).communicate(timeout=60)
+            _, _ = Popen(pyznap_send).communicate(timeout=60)
+            _, _ = Popen(pyznap_clean).communicate(timeout=60)
 
             # get all snapshots on fs0
             snapshots = {'frequent': [], 'hourly': [], 'daily': [], 'weekly': [], 'monthly': [], 'yearly': []}
@@ -528,7 +528,7 @@ class TestSpecialCases:
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
             # take snaps every 15min
-            _, _ = Popen(pyznap_snap).communicate()
+            _, _ = Popen(pyznap_snap).communicate(timeout=60)
 
         start_date = datetime(2018, 10, 28, 2, 0, 0)
         dates = [start_date + i * timedelta(minutes=15) for i in range(8)]
@@ -538,4 +538,4 @@ class TestSpecialCases:
             pyznap_snap = faketime + ['pyznap', '--config', config, 'snap']
 
             # take snaps every 15min
-            _, _ = Popen(pyznap_snap).communicate()
+            _, _ = Popen(pyznap_snap).communicate(timeout=60)

@@ -71,10 +71,19 @@ class SSH:
         self.user = user
         self.host = host
         self.port = port
+        # Initialize for __repr__ before connection check
+        self.compress = None
+        self.decompress = None
         self.socket = '/tmp/pyznap_{:s}@{:s}:{:d}_{:s}'.format(
             self.user, self.host, self.port, datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
         )
-        self.key = key or os.path.expanduser('~/.ssh/id_rsa')
+        # Find SSH key: explicit key > ed25519 > rsa
+        if key:
+            self.key = key
+        elif os.path.isfile(os.path.expanduser('~/.ssh/id_ed25519')):
+            self.key = os.path.expanduser('~/.ssh/id_ed25519')
+        else:
+            self.key = os.path.expanduser('~/.ssh/id_rsa')
 
         if not os.path.isfile(self.key):
             self.logger.error(f'{self.key} is not a valid ssh key file...')

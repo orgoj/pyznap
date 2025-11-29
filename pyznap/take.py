@@ -203,7 +203,7 @@ def take_config(config, settings=None, output_handler=None):
 
         try:
             # Children includes the base filesystem (named 'fsname')
-            children = zfs.find_exclude(conf, config, matching=settings['matching'])
+            children = zfs.find_exclude(conf, config, matching=settings.get('matching'))
         except DatasetNotFoundError:
             if conf.get('ignore_not_existing'):
                 logger.warning(f'Dataset {name_log:s} does not exist...')

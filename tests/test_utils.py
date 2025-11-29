@@ -10,6 +10,8 @@ Helper functions for tests.
 
 import logging
 import os
+import random
+import string
 from socket import gaierror, timeout
 
 import paramiko as pm
@@ -24,6 +26,12 @@ from paramiko.ssh_exception import (
     ProxyCommandFailure,
     SSHException,
 )
+
+
+def randomword(length):
+    """Generate a random lowercase word of given length."""
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(length))
 
 
 def open_ssh(user, host, key=None, port=22):
@@ -56,8 +64,12 @@ def open_ssh(user, host, key=None, port=22):
 
     logger = logging.getLogger(__name__)
 
+    # Find SSH key: explicit key > ed25519 > rsa
     if not key:
-        key = os.path.expanduser('~/.ssh/id_rsa')
+        if os.path.isfile(os.path.expanduser('~/.ssh/id_ed25519')):
+            key = os.path.expanduser('~/.ssh/id_ed25519')
+        else:
+            key = os.path.expanduser('~/.ssh/id_rsa')
     if not os.path.isfile(key):
         logger.error(f'{key} is not a valid ssh key file...')
         raise FileNotFoundError(key)

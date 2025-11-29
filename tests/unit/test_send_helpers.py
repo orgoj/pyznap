@@ -5,12 +5,9 @@ Unit tests for pyznap.send_helpers module.
 Tests helper classes and utilities for send operations.
 """
 
-import sys
 from unittest.mock import Mock
 
 import pytest
-
-sys.path.insert(0, '/home/user/pyznap')
 
 from pyznap.send_helpers import (
     DestConfig,

@@ -9,12 +9,9 @@ Tests all verification functionality including:
 - Special cases (new remote, empty remote, no common snapshots)
 """
 
-import sys
 from datetime import datetime, timedelta
 
 import pytest
-
-sys.path.insert(0, '/home/user/pyznap')
 
 from pyznap.verification import (
     SnapshotInfo,

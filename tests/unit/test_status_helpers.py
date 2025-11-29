@@ -5,12 +5,9 @@ Unit tests for pyznap.status_helpers module.
 Tests helper classes and utilities for status operations.
 """
 
-import sys
 from unittest.mock import Mock
 
 import pytest
-
-sys.path.insert(0, '/home/user/pyznap')
 
 from pyznap.status_helpers import (
     DestStatus,

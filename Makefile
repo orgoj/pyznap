@@ -1,4 +1,7 @@
-.PHONY: all install-dev test test-all lint format clean release release-test
+.PHONY: all install-dev test test-unit test-root test-integration test-ssh test-setup lint format clean release release-test
+
+# Privilege escalation: pkexec (GUI) or sudo
+SUDO := $(shell command -v pkexec 2>/dev/null || command -v sudo 2>/dev/null)
 
 all: lint test
 
@@ -7,12 +10,28 @@ install-dev:
 	pip install -e .[dev]
 	pre-commit install
 
-# Testing
-test:
-	pytest tests/ -m "not slow" -v
+# Setup test environment (packages, SSH)
+test-setup:
+	./scripts/test-setup.sh
 
-test-all:
-	pytest tests/ -v
+# ALL tests (unit + root)
+test: test-unit test-root
+
+# Unit tests (no root required)
+test-unit:
+	pytest tests/unit/ -v
+
+# All tests requiring root
+test-root: test-integration test-ssh
+
+# Integration tests (root + ZFS)
+# Note: pkexec changes cwd to /root, so we use absolute paths
+test-integration:
+	$(SUDO) pytest $(CURDIR)/tests/test_functions.py $(CURDIR)/tests/test_pyznap.py -v
+
+# SSH tests (root + ZFS + SSH)
+test-ssh:
+	$(SUDO) pytest $(CURDIR)/tests/test_functions_ssh.py $(CURDIR)/tests/test_pyznap_ssh.py -v
 
 # Code quality
 lint:

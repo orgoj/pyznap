@@ -59,7 +59,7 @@ include = ["pyznap*"]
 pyznap = ["config/*"]
 
 [tool.pytest.ini_options]
-addopts = "-v -m 'not slow'"
+addopts = "-v"
 testpaths = ["tests"]
 markers = [
     "slow: marks tests as slow (require ZFS + root)",
@@ -83,8 +83,6 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "B008",   # do not perform function calls in argument defaults
     "C901",   # too complex
-    "W291",   # trailing whitespace
-    "W293",   # blank line contains whitespace
 ]
 
 [tool.ruff.lint.per-file-ignores]

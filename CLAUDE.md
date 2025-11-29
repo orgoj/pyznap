@@ -8,11 +8,13 @@ source .venv/bin/activate
 pip install -e .[dev]
 
 # Run linting
-ruff check pyznap/
-ruff format --check pyznap/
+make lint
 
-# Run unit tests (no ZFS required)
-pytest tests/ -m "not slow"
+# Run unit tests (no root required)
+make test-unit
+
+# Run ALL tests (unit + integration with root)
+make test
 ```
 
 ## Project Structure
@@ -33,47 +35,61 @@ pyznap/
 
 ## Testing
 
-### Test Types
-
-- **Unit tests** (`tests/conftest.py` fixtures): Run without ZFS, use mocks
-- **Integration tests** (`test_pyznap.py`, `test_functions.py`): Require root + ZFS pools + `faketime`
+**IMPORTANT: Always use make targets for running tests!**
 
 ### Running Tests
 
 ```bash
-# Unit tests only (fast, no ZFS needed)
-pytest tests/ -m "not slow" -v
+# Setup test environment (install packages, SSH keys)
+make test-setup
 
-# All tests (requires root + ZFS + faketime)
-sudo pytest tests/ -v
+# ALL tests (unit + integration)
+make test
 
-# Specific test file
-pytest tests/test_functions.py -v
+# Unit tests only (no root required)
+make test-unit
+
+# All root tests (integration + SSH)
+make test-root
+
+# Integration tests only (root + ZFS)
+make test-integration
+
+# SSH tests only (root + ZFS + SSH)
+make test-ssh
 ```
+
+### Test Types
+
+- **Unit tests** (`tests/unit/`): No ZFS/root required
+- **Integration tests** (`test_functions.py`, `test_pyznap.py`): Require root + ZFS
+- **SSH tests** (`test_functions_ssh.py`, `test_pyznap_ssh.py`): Require root + ZFS + SSH to root@127.0.0.1
 
 ### Test Requirements
 
 Integration tests require:
-- Root access (ZFS commands need root)
-- `faketime` program installed
-- Available disk space for temporary ZFS pools (100MB each)
+- Root access via pkexec or sudo (handled by Makefile)
+- ZFS module loaded (tests create temporary file-backed pools)
+- `faketime`, `pv`, `mbuffer` packages (installed by `make test-setup`)
 
 ## Code Style
+
+**IMPORTANT: Always follow this order: format → lint → test**
+
+```bash
+# 1. Format first
+make format
+
+# 2. Then lint
+make lint
+
+# 3. Then test
+make test-unit
+```
 
 - **Formatter**: ruff format
 - **Linter**: ruff check
 - **Pre-commit**: Runs ruff automatically on commit
-
-```bash
-# Format code
-ruff format pyznap/ tests/
-
-# Check linting
-ruff check pyznap/ tests/
-
-# Fix auto-fixable issues
-ruff check --fix pyznap/ tests/
-```
 
 ## Key Modules
 

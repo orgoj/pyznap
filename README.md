@@ -29,6 +29,21 @@ need:
 
 You also need the `faketime` program for some tests to simulate pyznap running over time.
 
+
+#### Running Tests ####
+
+Use make targets to run tests:
+
+    make test-setup      # Install test dependencies (faketime, pv, mbuffer) and setup SSH
+    make test            # Run ALL tests (unit + integration)
+    make test-unit       # Run unit tests only (no root required)
+    make test-root       # Run all root tests (integration + SSH)
+    make test-integration  # Run integration tests (root + ZFS)
+    make test-ssh        # Run SSH tests (root + ZFS + SSH)
+
+Integration tests create temporary file-backed ZFS pools, so no existing pool is needed.
+
+
 I suggest installing [virtualenv & virtualenvwrapper](http://docs.python-guide.org/en/latest/dev/virtualenvs/),
 so you don't clutter your system python installation with additional packages.
 

@@ -11,8 +11,6 @@ Tests for pyznap functions.
 
 import fnmatch
 import logging
-import random
-import string
 import subprocess as sp
 from tempfile import NamedTemporaryFile
 
@@ -23,15 +21,16 @@ from pyznap.clean import clean_config
 from pyznap.process import DatasetNotFoundError
 from pyznap.send import send_config
 from pyznap.take import take_config
-from pyznap.utils import parse_name, read_config
+from tests.test_utils import randomword
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%b %d %H:%M:%S')
 logger = logging.getLogger(__name__)
 
 
-def randomword(length):
-    letters = string.ascii_lowercase
-    return ''.join(random.choice(letters) for i in range(length))
+ZPOOL = '/sbin/zpool'
+_word = randomword(8)
+POOL0 = 'pyznap_source_' + _word
+POOL1 = 'pyznap_dest_' + _word
 
 
 @pytest.fixture(scope='module')
@@ -39,10 +38,7 @@ def zpools():
     """Creates two temporary zpools to be called from test functions. Yields the two pool names
     and destroys them after testing."""
 
-    zpool = '/sbin/zpool'
-    _word = randomword(8)
-    pool0 = 'pyznap_source_' + _word
-    pool1 = 'pyznap_dest_' + _word
+    created_pools = []
 
     # Create temporary files on which the zpools are created
     with NamedTemporaryFile() as file0, NamedTemporaryFile() as file1:
@@ -57,129 +53,33 @@ def zpools():
         file1.write(b'0')
         file1.seek(0)
 
-        # Create temporary test pools
-        for pool, filename in zip([pool0, pool1], [filename0, filename1]):
-            try:
-                sp.check_call([zpool, 'create', pool, filename])
-            except sp.CalledProcessError as err:
-                logger.error(err)
-                return
-
         try:
-            fs0 = zfs.open(pool0)
-            fs1 = zfs.open(pool1)
-            assert fs0.name == pool0
-            assert fs1.name == pool1
-        except (DatasetNotFoundError, AssertionError, Exception) as err:
-            logger.error(err)
-        else:
-            yield fs0, fs1
+            # Create temporary test pools
+            for pool, filename in zip([POOL0, POOL1], [filename0, filename1]):
+                try:
+                    sp.check_call([ZPOOL, 'create', pool, filename])
+                    created_pools.append(pool)
+                except sp.CalledProcessError as err:
+                    logger.error(err)
+                    return
 
-        # Destroy temporary test pools
-        for pool in [pool0, pool1]:
             try:
-                sp.check_call([zpool, 'destroy', pool])
-            except sp.CalledProcessError as err:
+                fs0 = zfs.open(POOL0)
+                fs1 = zfs.open(POOL1)
+                assert fs0.name == POOL0
+                assert fs1.name == POOL1
+            except (DatasetNotFoundError, AssertionError, Exception) as err:
                 logger.error(err)
+            else:
+                yield fs0, fs1
 
-
-class TestUtils:
-    def test_read_config(self):
-        with NamedTemporaryFile('w') as file:
-            name = file.name
-            file.write('[rpool/data]\n')
-            file.write('hourly = 12\n')
-            file.write('monthly = 0\n')
-            file.write('clean = no\n')
-            file.write('dest = backup/data, tank/data, rpool/data\n')
-            file.write('compress = lzop, pigz, gzip\n\n')
-
-            file.write('[rpool]\n')
-            file.write('frequent = 4\n')
-            file.write('hourly = 24\n')
-            file.write('daily = 7\n')
-            file.write('weekly = 4\n')
-            file.write('monthly = 12\n')
-            file.write('yearly = 2\n')
-            file.write('snap = yes\n')
-            file.write('clean = yes\n')
-            file.write('dest = backup, tank\n\n')
-
-            file.write('[rpool/data_2]\n')
-            file.write('daily = 14\n')
-            file.write('yearly = 0\n')
-            file.write('clean = yes\n\n')
-
-            file.write('[tank]\n')
-            file.write('dest = backup/tank, rpool/tank, data/tank, zpool/tank\n')
-            file.write('exclude = , tank/media/* tank/data* tank/home/*, tank/media* tank/home*\n')
-            file.seek(0)
-
-            config = read_config(name)
-            conf0, conf1, conf2, conf3 = config
-
-            assert conf0['name'] == 'rpool'
-            assert conf0['key'] is None
-            assert conf0['frequent'] == 4
-            assert conf0['hourly'] == 24
-            assert conf0['daily'] == 7
-            assert conf0['weekly'] == 4
-            assert conf0['monthly'] == 12
-            assert conf0['yearly'] == 2
-            assert conf0['snap']
-            assert conf0['clean']
-            assert conf0['dest'] == ['backup', 'tank']
-            assert conf0['dest_keys'] is None
-
-            assert conf1['name'] == 'rpool/data'
-            assert conf1['key'] is None
-            assert conf1['frequent'] == 4
-            assert conf1['hourly'] == 12
-            assert conf1['daily'] == 7
-            assert conf1['weekly'] == 4
-            assert conf1['monthly'] == 0
-            assert conf1['yearly'] == 2
-            assert conf1['snap']
-            assert not conf1['clean']
-            assert conf1['dest'] == ['backup/data', 'tank/data', 'rpool/data']
-            assert conf1['dest_keys'] is None
-            assert conf1['compress'] == ['lzop', 'pigz', 'gzip']
-
-            assert conf2['name'] == 'rpool/data_2'
-            assert conf2['key'] is None
-            assert conf2['frequent'] == 4
-            assert conf2['hourly'] == 24
-            assert conf2['daily'] == 14
-            assert conf2['weekly'] == 4
-            assert conf2['monthly'] == 12
-            assert conf2['yearly'] == 0
-            assert conf2['snap']
-            assert conf2['clean']
-            assert conf2['dest'] is None
-            assert conf2['dest_keys'] is None
-
-            assert conf3['name'] == 'tank'
-            assert conf3['dest'] == ['backup/tank', 'rpool/tank', 'data/tank', 'zpool/tank']
-            assert conf3['exclude'] == [
-                None,
-                ['tank/media/*', 'tank/data*', 'tank/home/*'],
-                ['tank/media*', 'tank/home*'],
-            ]
-
-    def test_parse_name(self):
-        _type, fsname, user, host, port = parse_name('ssh:23:user@hostname:rpool/data')
-        assert _type == 'ssh'
-        assert fsname == 'rpool/data'
-        assert user == 'user'
-        assert host == 'hostname'
-        assert port == 23
-
-        _type, fsname, user, host, port = parse_name('rpool/data')
-        assert _type == 'local'
-        assert fsname == 'rpool/data'
-        assert user is None
-        assert host is None
-        assert port is None
+        finally:
+            # Destroy temporary test pools (always runs)
+            for pool in created_pools:
+                try:
+                    sp.check_call([ZPOOL, 'destroy', pool])
+                except sp.CalledProcessError as err:
+                    logger.error(err)
 
 
 class TestSnapshot:
@@ -344,6 +244,7 @@ class TestSnapshot:
                 'monthly': 0,
                 'yearly': 0,
                 'clean': True,
+                '_parent': None,
             },
             {
                 'name': f'{fs}/sub2',
@@ -354,6 +255,7 @@ class TestSnapshot:
                 'monthly': 0,
                 'yearly': 1,
                 'clean': True,
+                '_parent': fs.name,
             },
             {
                 'name': f'{fs}/sub3',
@@ -364,6 +266,7 @@ class TestSnapshot:
                 'monthly': 1,
                 'yearly': 0,
                 'clean': False,
+                '_parent': fs.name,
             },
             {
                 'name': f'{fs}/sub1/abc',
@@ -374,6 +277,7 @@ class TestSnapshot:
                 'monthly': 1,
                 'yearly': 1,
                 'clean': True,
+                '_parent': fs.name,
             },
             {
                 'name': f'{fs}/sub2/efg/hij',
@@ -384,6 +288,7 @@ class TestSnapshot:
                 'monthly': 0,
                 'yearly': 0,
                 'clean': True,
+                '_parent': f'{fs}/sub2',
             },
         ]
         clean_config(config)
@@ -469,7 +374,7 @@ class TestSending:
         fs0, fs1 = zpools
         fs0.destroy(force=True)
         fs1.destroy(force=True)
-        config = [{'name': fs0.name, 'dest': [fs1.name]}]
+        config = [{'name': fs0.name, 'dest': [fs1.name], 'dest_auto_create': ['yes']}]
 
         fs0.snapshot('snap0')
         zfs.create(f'{fs0.name:s}/sub1')
@@ -491,64 +396,82 @@ class TestSending:
 
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert set(fs0_children) == set(fs1_children)
+        assert (
+            set(fs0_children) == set(fs1_children)
+        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
 
     @pytest.mark.dependency(depends=['TestSending::test_send_full'])
     def test_send_incremental(self, zpools):
         fs0, fs1 = zpools
         fs0.destroy(force=True)
         fs1.destroy(force=True)
-        config = [{'name': fs0.name, 'dest': [fs1.name]}]
+
+        def make_config():
+            return [{'name': fs0.name, 'dest': [fs1.name], 'dest_auto_create': ['yes']}]
 
         fs0.snapshot('snap0', recursive=True)
         zfs.create(f'{fs0.name:s}/sub1')
         fs0.snapshot('snap1', recursive=True)
-        send_config(config)
+        send_config(make_config())
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert set(fs0_children) == set(fs1_children)
+        assert (
+            set(fs0_children) == set(fs1_children)
+        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
 
         zfs.create(f'{fs0.name:s}/sub2')
         fs0.snapshot('snap2', recursive=True)
-        send_config(config)
+        send_config(make_config())
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert set(fs0_children) == set(fs1_children)
+        assert (
+            set(fs0_children) == set(fs1_children)
+        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
 
         zfs.create(f'{fs0.name:s}/sub3')
         fs0.snapshot('snap3', recursive=True)
-        send_config(config)
+        send_config(make_config())
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert set(fs0_children) == set(fs1_children)
+        assert (
+            set(fs0_children) == set(fs1_children)
+        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
 
     @pytest.mark.dependency(depends=['TestSending::test_send_incremental'])
     def test_send_delete_snapshot(self, zpools):
         fs0, fs1 = zpools
-        config = [{'name': fs0.name, 'dest': [fs1.name]}]
+
+        def make_config():
+            return [{'name': fs0.name, 'dest': [fs1.name], 'dest_auto_create': ['yes']}]
 
         # Delete recent snapshots on dest
         fs1.snapshots()[-1].destroy(force=True)
         fs1.snapshots()[-1].destroy(force=True)
-        send_config(config)
+        send_config(make_config())
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert set(fs0_children) == set(fs1_children)
+        assert (
+            set(fs0_children) == set(fs1_children)
+        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
 
         # Delete recent snapshot on source
         fs0.snapshot('snap4', recursive=True)
-        send_config(config)
+        send_config(make_config())
         fs0.snapshots()[-1].destroy(force=True)
         fs0.snapshot('snap5', recursive=True)
-        send_config(config)
+        send_config(make_config())
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert set(fs0_children) == set(fs1_children)
+        assert (
+            set(fs0_children) == set(fs1_children)
+        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
 
     @pytest.mark.dependency(depends=['TestSending::test_send_delete_snapshot'])
     def test_send_delete_sub(self, zpools):
         fs0, fs1 = zpools
-        config = [{'name': fs0.name, 'dest': [fs1.name]}]
+
+        def make_config():
+            return [{'name': fs0.name, 'dest': [fs1.name], 'dest_auto_create': ['yes']}]
 
         # Delete subfilesystems
         sub3 = fs1.filesystems()[-1]
@@ -556,20 +479,24 @@ class TestSending:
         fs0.snapshot('snap6', recursive=True)
         sub2 = fs1.filesystems()[-1]
         sub2.destroy(force=True)
-        send_config(config)
+        send_config(make_config())
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert set(fs0_children) == set(fs1_children)
+        assert (
+            set(fs0_children) == set(fs1_children)
+        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
 
     @pytest.mark.dependency(depends=['TestSending::test_send_delete_sub'])
     def test_send_delete_old(self, zpools):
         fs0, fs1 = zpools
-        config = [{'name': fs0.name, 'dest': [fs1.name]}]
+
+        def make_config():
+            return [{'name': fs0.name, 'dest': [fs1.name], 'dest_auto_create': ['yes']}]
 
         # Delete old snapshot on source
         fs0.snapshots()[0].destroy(force=True)
         fs0.snapshot('snap7', recursive=True)
-        send_config(config)
+        send_config(make_config())
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
         assert not (set(fs0_children) == set(fs1_children))
@@ -585,7 +512,7 @@ class TestSending:
         fs1.destroy(force=True)
 
         exclude = ['*/sub1', '*/sub3/abc', '*/sub3/efg']
-        config = [{'name': fs0.name, 'dest': [fs1.name], 'exclude': [exclude]}]
+        config = [{'name': fs0.name, 'dest': [fs1.name], 'exclude': [exclude], 'dest_auto_create': ['yes']}]
 
         zfs.create(f'{fs0.name:s}/sub1')
         zfs.create(f'{fs0.name:s}/sub2')
@@ -603,7 +530,9 @@ class TestSending:
             fs0_children -= set(fnmatch.filter(fs0_children, match))
             fs0_children -= set(fnmatch.filter(fs0_children, match + '@snap'))
 
-        assert set(fs0_children) == set(fs1_children)
+        assert (
+            set(fs0_children) == set(fs1_children)
+        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
 
     @pytest.mark.dependency()
     def test_send_raw(self, zpools):
@@ -613,7 +542,7 @@ class TestSending:
         fs1.destroy(force=True)
 
         raw_send = ['yes']
-        config = [{'name': fs0.name, 'dest': [fs1.name], 'raw_send': raw_send}]
+        config = [{'name': fs0.name, 'dest': [fs1.name], 'raw_send': raw_send, 'dest_auto_create': ['yes']}]
 
         zfs.create(f'{fs0.name:s}/sub1', props={'compression': 'gzip'})
         zfs.create(f'{fs0.name:s}/sub2', props={'compression': 'lz4'})
@@ -627,4 +556,6 @@ class TestSending:
         fs0_children = set([child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]])
         fs1_children = set([child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]])
 
-        assert set(fs0_children) == set(fs1_children)
+        assert (
+            set(fs0_children) == set(fs1_children)
+        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
