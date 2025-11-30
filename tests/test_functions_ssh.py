@@ -470,9 +470,9 @@ class TestSending:
 
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'], ssh=ssh)[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency(depends=['TestSending::test_send_full'])
     def test_send_incremental(self, zpools):
@@ -497,9 +497,9 @@ class TestSending:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'], ssh=ssh)[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
         zfs.create(f'{fs0.name:s}/sub2')
         fs0.snapshot('snap2', recursive=True)
@@ -515,9 +515,9 @@ class TestSending:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'], ssh=ssh)[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
         zfs.create(f'{fs0.name:s}/sub3')
         fs0.snapshot('snap3', recursive=True)
@@ -533,9 +533,9 @@ class TestSending:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'], ssh=ssh)[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency(depends=['TestSending::test_send_incremental'])
     def test_send_catchup_intermediates(self, zpools):
@@ -598,9 +598,9 @@ class TestSending:
 
         # Also verify count matches
         fs0_snaps = [s.name.split('@')[1] for s in zfs.find(fs0.name, types=['snapshot'])]
-        assert len(fs0_snaps) == len(
-            fs1_snaps
-        ), f'Snapshot count mismatch: source={len(fs0_snaps)}, dest={len(fs1_snaps)}'
+        assert len(fs0_snaps) == len(fs1_snaps), (
+            f'Snapshot count mismatch: source={len(fs0_snaps)}, dest={len(fs1_snaps)}'
+        )
 
     @pytest.mark.dependency(depends=['TestSending::test_send_catchup_intermediates'])
     def test_send_delete_snapshot(self, zpools):
@@ -622,9 +622,9 @@ class TestSending:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'], ssh=ssh)[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
         # Delete recent snapshot on source
         fs0.snapshot('snap4', recursive=True)
@@ -643,9 +643,9 @@ class TestSending:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'], ssh=ssh)[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency(depends=['TestSending::test_send_delete_snapshot'])
     def test_send_delete_sub(self, zpools):
@@ -670,9 +670,9 @@ class TestSending:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'])[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'], ssh=ssh)[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency(depends=['TestSending::test_send_delete_sub'])
     def test_send_delete_old(self, zpools):
@@ -730,9 +730,9 @@ class TestSending:
             fs0_children -= set(fnmatch.filter(fs0_children, match))
             fs0_children -= set(fnmatch.filter(fs0_children, match + '@snap'))
 
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency()
     def test_send_compress(self, zpools):
@@ -770,9 +770,9 @@ class TestSending:
             fs1_children = [
                 child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'], ssh=ssh)[1:]
             ]
-            assert (
-                set(fs0_children) == set(fs1_children)
-            ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+            assert set(fs0_children) == set(fs1_children), (
+                f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+            )
 
 
 class TestSendingPull:
@@ -816,9 +816,9 @@ class TestSendingPull:
 
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'], ssh=ssh)[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency(depends=['TestSendingPull::test_send_full'])
     def test_send_incremental(self, zpools):
@@ -843,9 +843,9 @@ class TestSendingPull:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'], ssh=ssh)[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
         zfs.create(f'{fs0.name:s}/sub2', ssh=ssh)
         fs0.snapshot('snap2', recursive=True)
@@ -861,9 +861,9 @@ class TestSendingPull:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'], ssh=ssh)[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
         zfs.create(f'{fs0.name:s}/sub3', ssh=ssh)
         fs0.snapshot('snap3', recursive=True)
@@ -879,9 +879,9 @@ class TestSendingPull:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'], ssh=ssh)[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency(depends=['TestSendingPull::test_send_incremental'])
     def test_send_all_pyznap_snapshots_at_once(self, zpools):
@@ -921,9 +921,9 @@ class TestSendingPull:
 
             # Verify SSH source has expected snapshots
             fs0_snaps = [s.name.split('@')[1] for s in zfs.find(fs0.name, types=['snapshot'], ssh=ssh)]
-            assert (
-                len(fs0_snaps) == NUM_SNAPSHOTS
-            ), f'Expected {NUM_SNAPSHOTS} snapshots on source, got {len(fs0_snaps)}: {fs0_snaps}'
+            assert len(fs0_snaps) == NUM_SNAPSHOTS, (
+                f'Expected {NUM_SNAPSHOTS} snapshots on source, got {len(fs0_snaps)}: {fs0_snaps}'
+            )
 
             # Verify dest has NO snapshots yet
             fs1_snaps_before = list(zfs.find(fs1.name, types=['snapshot']))
@@ -943,9 +943,9 @@ class TestSendingPull:
 
             # Verify ALL pyznap snapshots exist on destination
             fs1_snaps = [s.name.split('@')[1] for s in zfs.find(fs1.name, types=['snapshot'])]
-            assert (
-                len(fs1_snaps) == NUM_SNAPSHOTS
-            ), f'Expected {NUM_SNAPSHOTS} snapshots on dest, got {len(fs1_snaps)}: {fs1_snaps}'
+            assert len(fs1_snaps) == NUM_SNAPSHOTS, (
+                f'Expected {NUM_SNAPSHOTS} snapshots on dest, got {len(fs1_snaps)}: {fs1_snaps}'
+            )
 
             # Verify each is a pyznap hourly snapshot
             for snap in fs1_snaps:
@@ -953,9 +953,9 @@ class TestSendingPull:
                 assert '_hourly' in snap, f'Not an hourly snapshot: {snap}'
 
             # Verify source and dest have identical snapshots
-            assert set(fs0_snaps) == set(
-                fs1_snaps
-            ), f'Snapshot mismatch:\n  source: {sorted(fs0_snaps)}\n  dest: {sorted(fs1_snaps)}'
+            assert set(fs0_snaps) == set(fs1_snaps), (
+                f'Snapshot mismatch:\n  source: {sorted(fs0_snaps)}\n  dest: {sorted(fs1_snaps)}'
+            )
 
         finally:
             os.unlink(config_path)
@@ -980,9 +980,9 @@ class TestSendingPull:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'], ssh=ssh)[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
         # Delete recent snapshot on source
         fs0.snapshot('snap4', recursive=True)
@@ -1001,9 +1001,9 @@ class TestSendingPull:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'], ssh=ssh)[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency(depends=['TestSendingPull::test_send_delete_snapshot'])
     def test_send_delete_sub(self, zpools):
@@ -1028,9 +1028,9 @@ class TestSendingPull:
         send_config(config)
         fs0_children = [child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'], ssh=ssh)[1:]]
         fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency(depends=['TestSendingPull::test_send_delete_sub'])
     def test_send_delete_old(self, zpools):
@@ -1088,9 +1088,9 @@ class TestSendingPull:
             fs0_children -= set(fnmatch.filter(fs0_children, match))
             fs0_children -= set(fnmatch.filter(fs0_children, match + '@snap'))
 
-        assert (
-            set(fs0_children) == set(fs1_children)
-        ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        assert set(fs0_children) == set(fs1_children), (
+            f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+        )
 
     @pytest.mark.dependency()
     def test_send_compress(self, zpools):
@@ -1128,6 +1128,6 @@ class TestSendingPull:
                 child.name.replace(fs0.name, '') for child in zfs.find(fs0.name, types=['all'], ssh=ssh)[1:]
             ]
             fs1_children = [child.name.replace(fs1.name, '') for child in zfs.find(fs1.name, types=['all'])[1:]]
-            assert (
-                set(fs0_children) == set(fs1_children)
-            ), f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+            assert set(fs0_children) == set(fs1_children), (
+                f'Snapshot mismatch: only_in_src={set(fs0_children) - set(fs1_children)}, only_in_dest={set(fs1_children) - set(fs0_children)}'
+            )

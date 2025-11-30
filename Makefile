@@ -33,17 +33,13 @@ test-integration:
 test-ssh:
 	$(SUDO) pytest $(CURDIR)/tests/test_functions_ssh.py $(CURDIR)/tests/test_pyznap_ssh.py -v
 
-# Code quality
+# Code quality - uses pre-commit to ensure same ruff version
 lint:
-	ruff check pyznap/ tests/
+	pre-commit run ruff --all-files
 
 format:
-	ruff format pyznap/ tests/
-	ruff check --fix pyznap/ tests/
-
-format-check:
-	ruff format --check pyznap/ tests/
-	ruff check pyznap/ tests/
+	pre-commit run ruff-format --all-files
+	pre-commit run ruff --all-files
 
 # Release
 release:

@@ -1,25 +1,25 @@
 #!/usr/bin/env python
 """
-    setup
-    ~~~~~~~~~~~~~~
+setup
+~~~~~~~~~~~~~~
 
-    pyznap installation using setuptools.
+pyznap installation using setuptools.
 
-    :copyright: (c) 2018-2019 by Yannick Boetzel.
-    :license: GPLv3, see LICENSE for more details.
+:copyright: (c) 2018-2019 by Yannick Boetzel.
+:license: GPLv3, see LICENSE for more details.
 """
 
 import os
 import re
-from setuptools import setup
 
+from setuptools import setup
 
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
 
-with open(os.path.join(DIRNAME, 'README.md'), 'r') as file:
+with open(os.path.join(DIRNAME, 'README.md')) as file:
     readme = file.read()
 
-with open(os.path.join(DIRNAME, 'pyznap/__init__.py'), 'r') as file:
+with open(os.path.join(DIRNAME, 'pyznap/__init__.py')) as file:
     version = re.search(r'__version__ = \'(.*?)\'', file.read()).group(1)
 
 setup(
@@ -27,7 +27,7 @@ setup(
     version=version,
     description='ZFS snapshot tool written in Python',
     long_description=readme,
-    long_description_content_type="text/markdown",
+    long_description_content_type='text/markdown',
     keywords='zfs snapshot backup',
     url='https://github.com/yboetz/pyznap',
     author='Yannick Boetzel',
@@ -62,8 +62,8 @@ setup(
         'Topic :: System :: Archiving :: Backup',
         'Topic :: System :: Filesystems',
     ],
-    entry_points = {
+    entry_points={
         'console_scripts': ['pyznap=pyznap.main:main'],
     },
-    zip_safe=False
+    zip_safe=False,
 )
