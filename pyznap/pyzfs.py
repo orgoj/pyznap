@@ -522,7 +522,7 @@ class ZFSSnapshot(ZFSDataset):
         logger = logging.getLogger(__name__)
 
         # get the size of the snapshot to send
-        stream_size = self.stream_size(base=base, raw=raw, resume_token=resume_token)
+        stream_size = self.stream_size(base=base, raw=raw, resume_token=resume_token, intermediates=intermediates)
         STATS.add('send_size', stream_size)
 
         # use minimal mbuffer size of 1 and maximal size of 512 (256 over ssh)
@@ -597,8 +597,8 @@ class ZFSSnapshot(ZFSDataset):
         logger.log(8, f'RUN: {cmd}')
         return sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # return zfs send process
 
-    def stream_size(self, base=None, raw=False, resume_token=None):
-        cache_key = (str(base), raw, resume_token)
+    def stream_size(self, base=None, raw=False, resume_token=None, intermediates=True):
+        cache_key = (str(base), raw, resume_token, intermediates)
         # cache stream sizes
         if not hasattr(self, 'stream_cache'):
             self.stream_cache = {}
@@ -617,7 +617,10 @@ class ZFSSnapshot(ZFSDataset):
             cmd.append(resume_token)
         else:
             if base is not None:
-                cmd.append('-I')
+                if intermediates:
+                    cmd.append('-I')
+                else:
+                    cmd.append('-i')
                 cmd.append(base.name)
 
             cmd.append(self.name)

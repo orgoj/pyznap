@@ -51,7 +51,7 @@ def send_snap(
 
     try:
         ssh_source = snapshot.ssh
-        stream_size = snapshot.stream_size(base=base, raw=raw, resume_token=resume_token)
+        stream_size = snapshot.stream_size(base=base, raw=raw, resume_token=resume_token, intermediates=intermediates)
 
         zfs.STATS.add('zfs_send_snap_count')
         if get_dry_run():
