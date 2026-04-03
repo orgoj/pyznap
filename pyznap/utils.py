@@ -12,9 +12,6 @@ import glob
 import logging
 import os
 import re
-
-# TODO: Migrate from pkg_resources to importlib.resources when dropping Python 3.6-3.8 support
-import warnings
 from configparser import (
     ConfigParser,
     DuplicateOptionError,
@@ -22,13 +19,11 @@ from configparser import (
     MissingSectionHeaderError,
     NoOptionError,
 )
+from importlib.resources import files as _pkg_files
 from subprocess import PIPE, CalledProcessError, TimeoutExpired
 
 from .process import run
 from .ssh import SSHException
-
-warnings.filterwarnings('ignore', message='pkg_resources is deprecated', category=UserWarning)
-from pkg_resources import resource_string  # noqa: E402
 
 SNAPSHOT_TYPES = ('frequent', 'hourly', 'daily', 'weekly', 'monthly', 'yearly')
 
@@ -402,7 +397,7 @@ def create_config(path):
     logger = logging.getLogger(__name__)
 
     CONFIG_FILE = os.path.join(path, 'pyznap.conf')
-    config = resource_string(__name__, 'config/pyznap.conf').decode('utf-8')
+    config = _pkg_files('pyznap.utils').joinpath('config/pyznap.conf').read_text(encoding='utf-8')
 
     logger.info('Initial setup...')
 

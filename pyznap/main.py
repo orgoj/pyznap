@@ -10,6 +10,7 @@ ZFS snapshot tool written in python.
 """
 
 import logging
+import logging.handlers
 import os
 import sys
 from argparse import ArgumentParser

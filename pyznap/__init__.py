@@ -8,4 +8,4 @@ pyznap - ZFS snapshot tool written in python.
 :license: GPLv3, see LICENSE for more details.
 """
 
-__version__ = '2.1.3'
+__version__ = '2.1.4'
