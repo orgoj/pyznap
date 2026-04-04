@@ -206,24 +206,18 @@ def send_filesystem(
         # find common snapshots between source & dest
         dest_snapnames = [snap.name.split('@')[1] for snap in dest_fs.snapshots()]
         common = set(snapnames) & set(dest_snapnames)
-
-    # if not resume and resume_token is not None:
-    #     if not abort:
-    #         logger.error('{:s} contains partially-complete state from "zfs receive -s" (~{:s}), '
-    #                      'but neither resume nor abort option is given...'
-    #                      .format(dest_name_log, bytes_fmt(base.stream_size(raw=raw, resume_token=resume_token))))
-    #         return 1
-    #     else:
-    #         logger.info('{:s} contains partially-complete state from "zfs receive -s" (~{:s}), '
-    #                     'will abort it...'
-    #                     .format(dest_name_log, bytes_fmt(base.stream_size(raw=raw, resume_token=resume_token))))
-    #         if abort_resume(dest_fs):
-    #             return 1
+        if not resume and resume_token is not None:
+            logger.error(
+                f'{dest_name_log:s} contains partially-complete state from "zfs receive -s" (~{bytes_fmt(base.stream_size(raw=raw, resume_token=resume_token)):s}), '
+                'but resume option is not set. Either set resume=yes or manually run: '
+                f'zfs receive -A {dest_name}'
+            )
+            return 1
 
     zfs.STATS.add('zfs_send_filesystem_count')
 
     was_transfer = False
-    if resume_token is not None:
+    if resume and resume_token is not None:
         logger.info(
             f'Found resume token. Resuming last transfer of {dest_name_log:s} (~{bytes_fmt(base.stream_size(raw=raw, resume_token=resume_token)):s})...'
         )
@@ -669,29 +663,28 @@ def create_dataset(name, name_log, ssh=None):
         return 0
 
 
-# def abort_resume(filesystem):
-#     """Aborts the resumable receive state (deletes resume token) and logs success/fail
+def abort_resume(filesystem):
+    """Aborts the resumable receive state (deletes resume token) and logs success/fail
 
-#     Parameters
-#     ----------
-#     filesystem : {ZFSFilesystem}
-#         Name of the receiving dataset to be aborted
+    Parameters
+    ----------
+    filesystem : {ZFSFilesystem}
+        Name of the receiving dataset to be aborted
 
-#     Returns
-#     -------
-#     int
-#         0 if success, 1 if not
-#     """
-#     logger = logging.getLogger(__name__)
-#     try:
-#         filesystem.receive_abort()
-#     except CalledProcessError as err:
-#         logger.error('Error while aborting resumable receive state on {}: \'{:s}\'...'
-#                      .format(filesystem, err.stderr.rstrip()))
-#         return 1
-#     except Exception as err:
-#         logger.error('Error while aborting resumable receive state on {}: {}...'.format(filesystem, err))
-#         return 1
-#     else:
-#         logger.info('Aborted resumable receive state on {:}...'.format(filesystem))
-#         return 0
+    Returns
+    -------
+    int
+        0 if success, 1 if not
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        filesystem.receive_abort()
+    except CalledProcessError as err:
+        logger.error(f"Error while aborting resumable receive state on {filesystem}: '{err.stderr.rstrip():s}'...")
+        return 1
+    except Exception as err:
+        logger.error(f'Error while aborting resumable receive state on {filesystem}: {err}...')
+        return 1
+    else:
+        logger.info(f'Aborted resumable receive state on {filesystem}...')
+        return 0
