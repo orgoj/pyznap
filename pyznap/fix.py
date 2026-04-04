@@ -122,7 +122,11 @@ def fix_snapshots(filesystems, format=None, type=None, type_map=None, recurse=Fa
                     if year < 100:
                         year += +cur_century
                     # get type from snap, with optional map or default type if specified
-                    snaptype = r.group('type')
+                    try:
+                        snaptype = r.group('type')
+                    except (IndexError, AttributeError) as err:
+                        logger.warning(f'Could not parse snapshot type from {snapname}: {err}')
+                        continue
                     if type_map:
                         if snaptype in type_map:
                             snaptype = type_map[snaptype]
@@ -131,18 +135,22 @@ def fix_snapshots(filesystems, format=None, type=None, type_map=None, recurse=Fa
                     if not snaptype:
                         logger.error(f'Unknown snap type {snaptype} for snapshot {snapname}')
                         continue
-                    new_snapname = (
-                        'pyznap_'
-                        + datetime(
-                            year,
-                            re_get_group_int(r, 'month', default=now.month),
-                            re_get_group_int(r, 'day', default=now.day),
-                            hour=re_get_group_int(r, 'hour', default=now.hour),
-                            minute=re_get_group_int(r, 'minute', default=now.minute),
-                            second=re_get_group_int(r, 'second', default=now.second),
-                        ).strftime('%Y-%m-%d_%H:%M:%S')
-                        + '_'
-                        + snaptype
-                    )
+                    try:
+                        new_snapname = (
+                            'pyznap_'
+                            + datetime(
+                                year,
+                                re_get_group_int(r, 'month', default=now.month),
+                                re_get_group_int(r, 'day', default=now.day),
+                                hour=re_get_group_int(r, 'hour', default=now.hour),
+                                minute=re_get_group_int(r, 'minute', default=now.minute),
+                                second=re_get_group_int(r, 'second', default=now.second),
+                            ).strftime('%Y-%m-%d_%H:%M:%S')
+                            + '_'
+                            + snaptype
+                        )
+                    except (ValueError, TypeError) as err:
+                        logger.warning(f'Could not parse date from {snapname}: {err}')
+                        continue
                     logger.debug(f'Renaming {snapname} -> {new_snapname}')
                     snapshot.rename(snapshot.fsname() + '@' + new_snapname)
