@@ -1,3 +1,4 @@
 allow make *
 allow git add *
 allow git commit *
+allow ruff *
