@@ -22,6 +22,22 @@ from .process import DatasetBusyError, DatasetExistsError, DatasetNotFoundError,
 from .ssh import SSH, SSHException
 from .utils import bytes_fmt, check_recv, parse_name
 
+# Transient (retryable) error patterns for SSH/network failures.
+# Note: matching is English-only; deploy with LANG=C in cron/systemd for consistency.
+TRANSIENT_PATTERNS = [
+    'Connection refused',
+    'Connection timed out',
+    'broken pipe',
+    'Software caused connection abort',
+    'Network is unreachable',
+]
+
+
+def _is_transient_error(error_msg):
+    """Return True if error_msg indicates a transient (retryable) network/SSH failure."""
+    msg = str(error_msg).lower()
+    return any(p.lower() in msg for p in TRANSIENT_PATTERNS)
+
 
 def send_snap(
     snapshot, dest_name, base=None, ssh_dest=None, raw=False, resume=False, resume_token=None, intermediates=True
@@ -439,13 +455,23 @@ def send_filesystem_stepwise(
         snap_name = snap.name.split('@')[1]
         logger.info('  Sending snapshot {} (base: {})...'.format(snap_name, current_base.name.split('@')[1]))
 
-        rc = send_snap(
-            snap, dest_name, base=current_base, ssh_dest=ssh_dest, raw=raw, resume=resume, intermediates=False
-        )
+        try:
+            rc = send_snap(
+                snap, dest_name, base=current_base, ssh_dest=ssh_dest, raw=raw, resume=resume, intermediates=False
+            )
+        except Exception as err:
+            if _is_transient_error(str(err)):
+                logger.warning(f'  Transient error sending {snap_name}: {err}')
+                return 2
+            logger.error(f'  Permanent error sending {snap_name}: {err}')
+            return 1
 
         if rc == 0:
             success_count += 1
             current_base = snap  # Use this as base for next snapshot
+        elif rc == 2:
+            logger.warning(f'  Transient error sending {snap_name}, aborting stepwise send for retry...')
+            return 2
         else:
             fail_count += 1
             logger.warning(f'  Skipping snapshot {snap_name} (send failed)...')
