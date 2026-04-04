@@ -469,7 +469,7 @@ def _main():
                     continue
 
                 # Verify each destination
-                for dest in conf['dest']:
+                for dest_idx, dest in enumerate(conf['dest']):
                     dest_name = dest['name'] if isinstance(dest, dict) else dest
 
                     try:
@@ -479,7 +479,7 @@ def _main():
                             from .ssh import SSH
 
                             dest_keys = conf.get('dest_keys', [None])
-                            dest_key = dest_keys[0] if dest_keys else None
+                            dest_key = dest_keys[dest_idx] if dest_keys and dest_idx < len(dest_keys) else None
                             ssh_dest = SSH(user, host, port=port, key=dest_key)
                             dest_fs = zfs.open(dst_name, ssh=ssh_dest)
                         else:
