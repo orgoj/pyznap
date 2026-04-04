@@ -302,7 +302,7 @@ def _main():
     try:
         logger.info('Starting pyznap...')
 
-        if args.command in ('snap', 'send', 'full', 'status', 'verify'):
+        if args.command in ('snap', 'send', 'full', 'status', 'verify', 'validate-config'):
             logger.info(f'Read config={config_path}')
             config = read_config(config_path)
             if config is None:
