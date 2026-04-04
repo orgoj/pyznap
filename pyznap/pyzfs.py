@@ -8,6 +8,7 @@ Python ZFS bindings, forked from https://bitbucket.org/stevedrake/weir/.
 :license: GPLv3, see LICENSE for more details.
 """
 
+import copy
 import logging
 import os
 import subprocess as sp
@@ -108,6 +109,7 @@ def find_exclude(conf, config, ssh=None, matching=None):
     exclude filesystems with own config"""
 
     logger = logging.getLogger(__name__)
+    conf = copy.deepcopy(conf)  # protect conf from .pop(0) at compress line
 
     name = conf['name']
     try:

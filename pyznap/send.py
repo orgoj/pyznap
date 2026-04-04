@@ -8,6 +8,7 @@ Send snapshots.
 :license: GPLv3, see LICENSE for more details.
 """
 
+import copy
 import logging
 import sys
 from fnmatch import fnmatch
@@ -480,6 +481,7 @@ def send_config(config, settings=None):
     logger.info('Sending snapshots...')
 
     for conf in config:
+        conf = copy.deepcopy(conf)  # protect original config from .pop(0) mutations
         if not conf.get('dest', None):
             logger.debug('Ignore config from send {}...'.format(conf['name']))
             continue
