@@ -15,6 +15,11 @@ import os
 import sys
 from argparse import ArgumentParser
 
+# Ensure English locale for reliable error string matching in ZFS/SSH output.
+# Transient error detection (send.py) depends on English patterns.
+os.environ.setdefault('LANG', 'C')
+os.environ.setdefault('LC_ALL', 'C')
+
 from errorhandler import ErrorHandler
 
 import pyznap.pyzfs as zfs

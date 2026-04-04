@@ -95,6 +95,7 @@ and let pyznap run regularly by adding the following lines
 
     SHELL=/bin/sh
     PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+    LANG=C
 
     */15 * * * *   root    /path/to/pyznap snap >> /var/log/pyznap.log 2>&1
 
@@ -106,6 +107,8 @@ If you also want to send your filesystems to another location you can add a line
     0 0 * * *   root    /path/to/pyznap send >> /var/log/pyznap.log 2>&1
 
 This will backup your data once per day at 12am.
+
+**Important:** Set `LANG=C` in your cron environment (as shown above). Pyznap detects transient SSH/network errors by matching English error strings from ZFS and SSH output. Non-English locales will cause these patterns to be missed, preventing automatic retries on connection failures. Pyznap also sets `LANG=C` internally at startup as a safety net, but explicit configuration is recommended.
 
 You can also manage, send to and pull from remote ssh locations. Always specify ssh locations with
 
