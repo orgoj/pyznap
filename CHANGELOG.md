@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.2.0] - 2026-04-04
+### Fixed
+- Fix config mutation: `.pop(0)` calls no longer destroy the original config, enabling `full` command reuse (Fix 1.1)
+- Fix `validate-config` CLI command crash with `UnboundLocalError` (Fix 1.2)
+- Fix `status` command using wrong SSH key for remote destinations (Fix 1.3)
+- Fix `verify` command using first dest key for all destinations (Fix 1.4)
+- Add `pipefail` to shell pipelines to detect intermediate failures in `zfs send | mbuffer | pv` chains (Fix 1.5)
+- Add debug logging when `zfs receive -F` (force) is used (Fix 1.6)
+- Restore `resume` config flag handling — error with instructions when `resume=no` but token exists (Fix 2.1)
+- Stepwise send now returns exit code 2 for transient errors (SSH timeout, connection refused) enabling retry (Fix 2.2)
+- Batch `getprops()` calls in verification for better performance (Fix 2.3)
+- Mark dead code helpers in `send_helpers.py`/`status_helpers.py` as target architecture (Fix 2.4)
+- Fix `take_snap()` computing snapshot name multiple times (Fix 3.1)
+- Add error handling for malformed snapshot names in `fix.py` (Fix 3.2)
+- Deduplicate snapshot categorization logic using `SnapshotCategorizer` (Fix 3.3)
+
+
 ## [1.6.0] - 2020-09-22
 ### Added
 - Added resumable send/receive.
