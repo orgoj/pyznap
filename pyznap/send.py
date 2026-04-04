@@ -65,6 +65,7 @@ def send_snap(
         send = snapshot.send(
             ssh_dest=ssh_dest, base=base, intermediates=intermediates, raw=raw, resume_token=resume_token
         )
+        logger.debug(f'Using force receive (-F) for {dest_name_log}')
         recv = zfs.receive(
             name=dest_name,
             stdin=send.stdout,

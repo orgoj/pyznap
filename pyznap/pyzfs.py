@@ -294,6 +294,8 @@ def receive(
     elif append_path:
         cmd.append('-d')
 
+    # -F (force) is always used: for a backup tool, dest must match source.
+    # This destroys snapshots on dest that don't exist on source — by design.
     if force:
         cmd.append('-F')
     if nomount:
