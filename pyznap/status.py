@@ -215,7 +215,7 @@ def status_filesystem(
                 status[_prefix + 'name'] = dest_name
                 # check snapshots on dest
                 common_snapshots = []
-                ssh_dest = get_ssh_for_dest(d, conf)
+                ssh_dest = get_ssh_for_dest(d, conf, dest_keys=conf.get('dest_keys'), dest_idx=i)
                 try:
                     dest_fs = zfs.open(dest_name, ssh=ssh_dest)
                 except DatasetNotFoundError:
@@ -452,7 +452,7 @@ def output_html(data, values=None, tabulator=True):
 SSH_DESTS = {}
 
 
-def get_ssh_for_dest(dest, conf):
+def get_ssh_for_dest(dest, conf, dest_keys=None, dest_idx=0):
     try:
         _type, fsname, user, host, port = parse_name(dest)
     except ValueError as err:
@@ -465,7 +465,11 @@ def get_ssh_for_dest(dest, conf):
         if dest_key in SSH_DESTS:
             return SSH_DESTS[dest_key]
         try:
-            ssh = SSH(user, host, port=port, key=conf['key'])
+            if dest_keys and dest_idx < len(dest_keys):
+                key = dest_keys[dest_idx]
+            else:
+                key = conf.get('key')
+            ssh = SSH(user, host, port=port, key=key)
         except (FileNotFoundError, SSHException):
             raise
         SSH_DESTS[dest_key] = ssh
