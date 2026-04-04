@@ -82,6 +82,7 @@ class MockZFSFilesystem:
             properties: Dict of ZFS properties
         """
         self.name = name
+        self.ssh = None  # Match ZFSDataset interface
         self._snapshots = snapshots if snapshots is not None else []
         self._properties = properties if properties is not None else {}
         self._exclude_properties = {}

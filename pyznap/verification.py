@@ -16,6 +16,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
+import pyznap.pyzfs as zfs
+
 logger = logging.getLogger(__name__)
 
 
@@ -192,12 +194,29 @@ def get_snapshots_with_metadata(filesystem) -> List[SnapshotInfo]:
         logger.error(f'Failed to get snapshots for {filesystem}: {err}')
         return []
 
+    # Batch-fetch properties for all snapshots in a single subprocess call (O(1) vs O(N)).
+    # Falls back to per-snapshot getprops() if findprops is unavailable (e.g. in tests).
+    try:
+        props_batch = zfs.findprops(
+            filesystem.name,
+            ssh=getattr(filesystem, 'ssh', None),
+            props=['creation', 'used', 'referenced'],
+            types=['snapshot'],
+        )
+    except Exception:
+        props_batch = {}
+        for snap in fs_snapshots:
+            try:
+                props_batch[snap.name] = snap.getprops()
+            except Exception:
+                pass
+
     for snap in fs_snapshots:
         try:
-            props = snap.getprops()
-            creation_time = datetime.fromtimestamp(int(props['creation'][0]))
-            used = int(props['used'][0])
-            referenced = int(props['referenced'][0])
+            snap_props = props_batch.get(snap.name, {})
+            creation_time = datetime.fromtimestamp(int(snap_props['creation'][0]))
+            used = int(snap_props['used'][0])
+            referenced = int(snap_props['referenced'][0])
 
             # Extract snapshot type from name
             snap_type = extract_snapshot_type(snap.name)
