@@ -11,6 +11,7 @@ Python ZFS bindings, forked from https://bitbucket.org/stevedrake/weir/.
 import copy
 import logging
 import os
+import shutil
 import subprocess as sp
 import sys
 from fnmatch import fnmatch
@@ -20,7 +21,7 @@ from .process import DatasetBusyError, DatasetNotFoundError, check_output, check
 from .ssh import SSH, SSHException
 from .utils import bytes_fmt, exists, parse_name
 
-SHELL = ['sh', '-c']
+SHELL = ['bash', '-o', 'pipefail', '-c'] if shutil.which('bash') else ['sh', '-c']
 
 # Use mbuffer if installed on the system
 if exists('mbuffer'):
@@ -312,7 +313,10 @@ def receive(
         cmd = mbuffer(mbuff_size) + ['|'] + cmd
 
     # execute command with shell (sh or ssh)
-    cmd = shell + [' '.join(cmd)]
+    if ssh:
+        cmd = shell + [f'bash -o pipefail -c {quote(" ".join(cmd))}']
+    else:
+        cmd = shell + [' '.join(cmd)]
 
     logger.log(8, f'RUN: {cmd}')
     return sp.Popen(cmd, stdin=stdin, stderr=sp.PIPE)  # zfs receive process
@@ -594,7 +598,10 @@ class ZFSSnapshot(ZFSDataset):
             cmd += ['|'] + compress
 
         # execute command with shell (sh or ssh)
-        cmd = shell + [' '.join(cmd)]
+        if self.ssh:
+            cmd = shell + [f'bash -o pipefail -c {quote(" ".join(cmd))}']
+        else:
+            cmd = shell + [' '.join(cmd)]
 
         logger.log(8, f'RUN: {cmd}')
         return sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # return zfs send process
