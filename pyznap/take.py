@@ -43,21 +43,22 @@ def take_snap(filesystem, _type, output_handler=None):
     def snapname(_type):
         return 'pyznap_{:s}_{:s}'.format(now().strftime('%Y-%m-%d_%H:%M:%S'), _type)
 
-    snap_full_name = f'{filesystem}@{snapname(_type):s}'
+    name = snapname(_type)
+    snap_full_name = f'{filesystem}@{name:s}'
 
     logger.info(f'Taking snapshot {snap_full_name}...')
 
     operation = {
         'action': 'create',
         'filesystem': str(filesystem),
-        'snapshot': snapname(_type),
+        'snapshot': name,
         'type': _type,
         'status': 'success',
         'error': None,
     }
 
     try:
-        filesystem.snapshot(snapname=snapname(_type))
+        filesystem.snapshot(snapname=name)
     except (DatasetBusyError, DatasetExistsError) as err:
         logger.error(err)
         operation['status'] = 'error'
