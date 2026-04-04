@@ -48,6 +48,10 @@ Core package implementing ZFS snapshot lifecycle: take, clean, send/receive, sta
 - Integration tests require root + ZFS kernel module
 - Mock objects available in `tests/fixtures/mock_zfs.py` and `tests/fixtures/mock_ssh.py`
 
+### Design Decisions
+- **Force receive (`-F`) is BY DESIGN**: `zfs receive -F` is intentional. Pyznap creates exact backup mirrors of source datasets. Force receive ensures the destination is a bit-perfect replica. This is NOT a bug or footgun — it is the core backup semantics.
+- **Dest disk space monitoring is outside pyznap's scope**: Monitoring free space on destination pools is the responsibility of the destination machine's monitoring (e.g., Prometheus node_exporter). Pyznap logs errors when writes fail but does not proactively check destination capacity.
+
 ### Common Patterns
 - Each module follows `*_config()` -> `*_filesystem()` -> individual operation pattern
 - SSH connections: `SSH(user, host, port, key)` with auto-cleanup via `close()` or `__del__`

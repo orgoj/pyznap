@@ -40,6 +40,10 @@ ZFS snapshot management tool written in Python. Handles automated snapshot creat
 - SSH tests: `make test-ssh` (root + ZFS + SSH to root@127.0.0.1)
 - All tests: `make test`
 
+### Design Decisions
+- **Force receive (`-F`) is BY DESIGN**: Pyznap creates exact backup mirrors. Force receive ensures destination matches source exactly. This is core backup semantics, not a bug.
+- **Dest disk space is dest machine's responsibility**: Pyznap does not monitor destination pool capacity. Operators should use Prometheus/node_exporter or similar on the backup target.
+
 ### Common Patterns
 - Config format: INI files parsed by ConfigParser (see `pyznap/config/pyznap.conf` sample)
 - SSH destinations: `ssh:port:user@host:pool/dataset`
