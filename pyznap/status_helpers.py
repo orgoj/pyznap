@@ -207,12 +207,13 @@ class SnapshotCategorizer:
     """
 
     @staticmethod
-    def categorize(fs_snapshots) -> Dict[str, List]:
+    def categorize(fs_snapshots, prefixes=('pyznap',)) -> Dict[str, List]:
         """
         Categorize snapshots by type.
 
         Args:
             fs_snapshots: List of ZFS snapshot objects
+            prefixes: Tuple of snapshot name prefixes to include (default: pyznap only)
 
         Returns:
             Dict mapping snapshot types to lists of snapshots
@@ -225,9 +226,9 @@ class SnapshotCategorizer:
         snapshots = {t: [] for t in SNAPSHOT_TYPES}
 
         for snap in fs_snapshots:
-            # Ignore snapshots not taken with pyznap
+            # Ignore snapshots not matching accepted prefixes
             snap_name = snap.name.split('@')[1] if '@' in snap.name else ''
-            if not snap_name.startswith('pyznap'):
+            if not snap_name.startswith(prefixes):
                 continue
 
             try:

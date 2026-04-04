@@ -20,6 +20,7 @@ import pyznap.pyzfs as zfs
 
 from .process import DatasetBusyError, DatasetNotFoundError
 from .ssh import SSH, SSHException
+from .status_helpers import SnapshotCategorizer
 from .utils import SNAPSHOT_TYPES, bytes_fmt, parse_name
 
 ZFS_SIZE_PROPERTIES = (
@@ -135,7 +136,6 @@ def status_filesystem(
     if send:
         zfs.STATS.add('send_count')
 
-    snapshots = {t: [] for t in SNAPSHOT_TYPES}
     # catch exception if dataset was destroyed since pyznap was started
     try:
         fs_snapshots = filesystem.snapshots()
@@ -143,20 +143,7 @@ def status_filesystem(
         logger.error(f'Error while opening {filesystem}: {err}...')
         return 1
     have_snapshots = bool(fs_snapshots)
-    # categorize snapshots
-    for snaps in fs_snapshots:
-        # Ignore snapshots not taken with pyznap
-        if not snaps.name.split('@')[1].startswith('pyznap'):
-            continue
-        try:
-            snap_type = snaps.name.split('_')[-1]
-            snapshots[snap_type].append(snaps)
-        except (ValueError, KeyError):
-            continue
-
-    # Reverse sort by time taken
-    for snaps in snapshots.values():
-        snaps.reverse()
+    snapshots = SnapshotCategorizer.categorize(fs_snapshots)
 
     level = logging.INFO
 

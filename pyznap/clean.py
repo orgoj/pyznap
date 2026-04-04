@@ -15,6 +15,7 @@ import pyznap.pyzfs as zfs
 
 from .process import DatasetBusyError, DatasetNotFoundError
 from .ssh import SSH, SSHException
+from .status_helpers import SnapshotCategorizer
 from .utils import SNAPSHOT_TYPES, parse_name
 
 
@@ -78,27 +79,13 @@ def clean_filesystem(filesystem, conf, output_handler=None):
     logger = logging.getLogger(__name__)
     logger.debug(f'Cleaning snapshots on {filesystem}...')
 
-    snapshots = {t: [] for t in SNAPSHOT_TYPES}
     # catch exception if dataset was destroyed since pyznap was started
     try:
         fs_snapshots = filesystem.snapshots()
     except (DatasetNotFoundError, DatasetBusyError) as err:
         logger.error(f'Error while opening {filesystem}: {err}...')
         return 1
-    # categorize snapshots
-    for snap in fs_snapshots:
-        # Ignore snapshots not taken with pyznap or sanoid
-        if not snap.name.split('@')[1].startswith(('pyznap', 'autosnap')):
-            continue
-        try:
-            snap_type = snap.name.split('_')[-1]
-            snapshots[snap_type].append(snap)
-        except (ValueError, KeyError):
-            continue
-
-    # Reverse sort by time taken
-    for snaps in snapshots.values():
-        snaps.reverse()
+    snapshots = SnapshotCategorizer.categorize(fs_snapshots, prefixes=('pyznap', 'autosnap'))
 
     for stype in reversed(SNAPSHOT_TYPES):
         for snap in snapshots[stype][conf[stype] :]:
