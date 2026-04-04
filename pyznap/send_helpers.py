@@ -5,6 +5,9 @@ This module provides structured data classes and helper functions
 to make send operations more maintainable and testable.
 """
 
+# TODO: migrate send.py to use these helpers. This module represents the target
+# architecture for send operations. See RALPLAN Fix 2.4 for context.
+
 import logging
 from dataclasses import dataclass
 from typing import List, Optional, Union

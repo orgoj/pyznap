@@ -5,6 +5,9 @@ This module provides structured data classes and helper functions
 to make status operations more maintainable and testable.
 """
 
+# TODO: migrate status.py to use these helpers. This module represents the target
+# architecture for status operations. See RALPLAN Fix 2.4 for context.
+
 import logging
 from collections import OrderedDict
 from datetime import datetime
